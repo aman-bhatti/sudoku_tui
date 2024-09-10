@@ -36,14 +36,15 @@ var (
 )
 
 type model struct {
-	board        [9][9]int
-	initialBoard [9][9]int // Store the initial board to differentiate between pre-filled and user-added numbers
-	cursor       [2]int
-	userInput    string
-	err          string
-	completed    bool
-	width        int
-	height       int
+	board         [9][9]int
+	initialBoard  [9][9]int // Store the initial board to differentiate between pre-filled and user-added numbers
+	cursor        [2]int
+	userInput     string
+	err           string
+	completed     bool
+	width         int
+	height        int
+	cursorVisible bool
 }
 
 func main() {
@@ -84,21 +85,30 @@ func teaHandler(s ssh.Session) (tea.Model, []tea.ProgramOption) {
 	pty, _, _ := s.Pty()
 	initialBoard := generateSudoku()
 	m := model{
-		board:        initialBoard,
-		initialBoard: initialBoard, // Copy of the initial board
-		cursor:       [2]int{0, 0},
-		width:        pty.Window.Width,
-		height:       pty.Window.Height,
+		board:         initialBoard,
+		initialBoard:  initialBoard,
+		cursor:        [2]int{0, 0},
+		width:         pty.Window.Width,
+		height:        pty.Window.Height,
+		cursorVisible: true,
 	}
 	return m, []tea.ProgramOption{tea.WithAltScreen()}
 }
 
 func (m model) Init() tea.Cmd {
 	return tea.Batch(
-		tea.EnterAltScreen, // Ensure you're in the alternate screen
-		tea.ShowCursor,     // Explicitly show the cursor
+		tea.EnterAltScreen,
+		blinkCursor(time.Second),
 	)
 }
+
+func blinkCursor(duration time.Duration) tea.Cmd {
+	return tea.Tick(duration, func(time.Time) tea.Msg {
+		return cursorBlinkMsg{}
+	})
+}
+
+type cursorBlinkMsg struct{}
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -115,8 +125,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+	case cursorBlinkMsg:
+		m.cursorVisible = !m.cursorVisible
+		return m, blinkCursor(time.Second)
 	}
-	return m, tea.ShowCursor
+	return m, nil
 }
 
 func (m model) View() string {
@@ -128,8 +141,8 @@ func (m model) View() string {
 
 	// Board rendering with a background applied
 	boardWithBackground := lipgloss.NewStyle().
-		Background(boardBackground). // Set explicit background color
-		Padding(1).                  // Add padding around the board for a clean look
+		Background(boardBackground).
+		Padding(1).
 		Render(m.renderBoard())
 
 	s += boardWithBackground + "\n"
@@ -162,12 +175,16 @@ func (m model) renderBoard() string {
 
 			// Highlight cursor position
 			if m.cursor[0] == i && m.cursor[1] == j {
-				style = style.Background(highlightColor)
+				if m.cursorVisible {
+					style = style.Background(highlightColor)
+				} else {
+					style = style.Foreground(highlightColor)
+				}
 			}
 
 			// Render the cell
 			if cell == 0 {
-				boardView += style.Foreground(emptyColor).Render("·")
+				boardView += style.Render("·")
 			} else if m.initialBoard[i][j] != 0 {
 				// Pre-filled numbers in white
 				boardView += style.Foreground(normalColor).Render(fmt.Sprintf("%d", cell))
@@ -259,3 +276,4 @@ func isBoardFull(board [9][9]int) bool {
 	}
 	return true
 }
+
