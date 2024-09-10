@@ -36,15 +36,14 @@ var (
 )
 
 type model struct {
-	board         [9][9]int
-	initialBoard  [9][9]int // Store the initial board to differentiate between pre-filled and user-added numbers
-	cursor        [2]int
-	userInput     string
-	err           string
-	completed     bool
-	width         int
-	height        int
-	cursorVisible bool
+	board        [9][9]int
+	initialBoard [9][9]int // Store the initial board to differentiate between pre-filled and user-added numbers
+	cursor       [2]int
+	userInput    string
+	err          string
+	completed    bool
+	width        int
+	height       int
 }
 
 func main() {
@@ -85,30 +84,18 @@ func teaHandler(s ssh.Session) (tea.Model, []tea.ProgramOption) {
 	pty, _, _ := s.Pty()
 	initialBoard := generateSudoku()
 	m := model{
-		board:         initialBoard,
-		initialBoard:  initialBoard,
-		cursor:        [2]int{0, 0},
-		width:         pty.Window.Width,
-		height:        pty.Window.Height,
-		cursorVisible: true,
+		board:        initialBoard,
+		initialBoard: initialBoard,
+		cursor:       [2]int{0, 0},
+		width:        pty.Window.Width,
+		height:       pty.Window.Height,
 	}
 	return m, []tea.ProgramOption{tea.WithAltScreen()}
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(
-		tea.EnterAltScreen,
-		blinkCursor(time.Second),
-	)
+	return tea.EnterAltScreen
 }
-
-func blinkCursor(duration time.Duration) tea.Cmd {
-	return tea.Tick(duration, func(time.Time) tea.Msg {
-		return cursorBlinkMsg{}
-	})
-}
-
-type cursorBlinkMsg struct{}
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -125,9 +112,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-	case cursorBlinkMsg:
-		m.cursorVisible = !m.cursorVisible
-		return m, blinkCursor(time.Second)
 	}
 	return m, nil
 }
@@ -175,21 +159,22 @@ func (m model) renderBoard() string {
 
 			// Highlight cursor position
 			if m.cursor[0] == i && m.cursor[1] == j {
-				if m.cursorVisible {
-					style = style.Background(highlightColor)
-				} else {
-					style = style.Foreground(highlightColor)
-				}
+				style = style.
+					Background(highlightColor).
+					Foreground(lipgloss.Color("0")). // Black text for contrast
+					Bold(true).
+					Border(lipgloss.NormalBorder()).
+					BorderForeground(lipgloss.Color("15")) // White border
 			}
 
 			// Render the cell
 			if cell == 0 {
 				boardView += style.Render("·")
 			} else if m.initialBoard[i][j] != 0 {
-				// Pre-filled numbers in white
+				// Pre-filled numbers
 				boardView += style.Foreground(normalColor).Render(fmt.Sprintf("%d", cell))
 			} else {
-				// User-added numbers in red
+				// User-added numbers
 				boardView += style.Foreground(userInputColor).Render(fmt.Sprintf("%d", cell))
 			}
 
