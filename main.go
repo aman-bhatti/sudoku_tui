@@ -42,15 +42,19 @@ const (
 type model struct {
 	board        [9][9]int
 	initialBoard [9][9]int
+	solution     [9][9]int
 	cursor       [2]int
 	userInput    string
 	err          string
+	message      string
 	completed    bool
 	width        int
 	height       int
 }
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
+
 	s, err := wish.NewServer(
 		wish.WithAddress(net.JoinHostPort(host, port)),
 		wish.WithHostKeyPath(".ssh/term_info_ed25519"),
@@ -86,10 +90,11 @@ func main() {
 
 func teaHandler(s ssh.Session) (tea.Model, []tea.ProgramOption) {
 	pty, _, _ := s.Pty()
-	initialBoard := generateSudoku()
+	board, solution := generateSudoku()
 	m := model{
-		board:        initialBoard,
-		initialBoard: initialBoard,
+		board:        board,
+		initialBoard: board,
+		solution:     solution,
 		cursor:       [2]int{0, 0},
 		width:        pty.Window.Width,
 		height:       pty.Window.Height,
@@ -129,6 +134,10 @@ func (m model) View() string {
 
 	if m.err != "" {
 		s += "\n" + red + m.err + reset
+	}
+
+	if m.message != "" {
+		s += "\n" + green + m.message + reset
 	}
 
 	return s
@@ -191,7 +200,11 @@ func (m *model) updateBoard() {
 			m.board[row][col] = num
 			m.err = ""
 			if isBoardFull(m.board) {
-				m.completed = true
+				if m.checkSolution() {
+					m.message = "Congratulations! You have solved the Sudoku correctly!"
+				} else {
+					m.message = "The board is full, but the solution is incorrect. Keep trying!"
+				}
 			}
 		} else {
 			m.err = "Invalid move"
@@ -201,24 +214,73 @@ func (m *model) updateBoard() {
 	}
 }
 
-func generateSudoku() [9][9]int {
-	var board [9][9]int
-	for i := 0; i < 20; i++ {
-		row, col := rand.Intn(9), rand.Intn(9)
-		num := rand.Intn(9) + 1
-		if isValid(board, row, col, num) {
-			board[row][col] = num
+func (m *model) checkSolution() bool {
+	for i := 0; i < 9; i++ {
+		for j := 0; j < 9; j++ {
+			if m.board[i][j] != m.solution[i][j] {
+				return false
+			}
 		}
 	}
-	return board
+	return true
+}
+
+func generateSudoku() ([9][9]int, [9][9]int) {
+	var board, solution [9][9]int
+	fillBoard(&solution)
+	board = solution
+	removeCells(&board)
+	return board, solution
+}
+
+func fillBoard(board *[9][9]int) bool {
+	for i := 0; i < 9; i++ {
+		for j := 0; j < 9; j++ {
+			if board[i][j] == 0 {
+				for num := 1; num <= 9; num++ {
+					if isValid(*board, i, j, num) {
+						board[i][j] = num
+						if fillBoard(board) {
+							return true
+						}
+						board[i][j] = 0
+					}
+				}
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func removeCells(board *[9][9]int) {
+	cellsToRemove := 40 // Adjust this number to control difficulty
+	for cellsToRemove > 0 {
+		row := rand.Intn(9)
+		col := rand.Intn(9)
+		if board[row][col] != 0 {
+			board[row][col] = 0
+			cellsToRemove--
+		}
+	}
 }
 
 func isValid(board [9][9]int, row, col, num int) bool {
+	// Check row
 	for i := 0; i < 9; i++ {
-		if board[row][i] == num || board[i][col] == num {
+		if board[row][i] == num {
 			return false
 		}
 	}
+
+	// Check column
+	for i := 0; i < 9; i++ {
+		if board[i][col] == num {
+			return false
+		}
+	}
+
+	// Check 3x3 sub-box
 	startRow, startCol := row-row%3, col-col%3
 	for i := 0; i < 3; i++ {
 		for j := 0; j < 3; j++ {
@@ -227,6 +289,7 @@ func isValid(board [9][9]int, row, col, num int) bool {
 			}
 		}
 	}
+
 	return true
 }
 
@@ -240,4 +303,3 @@ func isBoardFull(board [9][9]int) bool {
 	}
 	return true
 }
-
