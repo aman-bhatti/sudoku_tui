@@ -28,16 +28,16 @@ const (
 )
 
 var (
-	highlightColor  = lipgloss.Color("205")
-	normalColor     = lipgloss.Color("15") // White color for pre-filled numbers
-	userInputColor  = lipgloss.Color("1")  // Red color for user-added numbers
-	emptyColor      = lipgloss.Color("8")
-	boardBackground = lipgloss.Color("236") // Dark gray background
+	highlightColor  = lipgloss.Color("#FF00FF") // Bright magenta
+	normalColor     = lipgloss.Color("#FFFFFF") // White
+	userInputColor  = lipgloss.Color("#FF0000") // Bright red
+	emptyColor      = lipgloss.Color("#444444") // Dark gray
+	boardBackground = lipgloss.Color("#000000") // Black
 )
 
 type model struct {
 	board        [9][9]int
-	initialBoard [9][9]int // Store the initial board to differentiate between pre-filled and user-added numbers
+	initialBoard [9][9]int
 	cursor       [2]int
 	userInput    string
 	err          string
@@ -119,7 +119,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) View() string {
 	s := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("15")).
+		Foreground(normalColor).
 		Render("Sudoku") + "\n\n"
 
 	boardWithBackground := lipgloss.NewStyle().
@@ -130,12 +130,12 @@ func (m model) View() string {
 	s += boardWithBackground + "\n"
 
 	s += lipgloss.NewStyle().
-		Foreground(lipgloss.Color("8")).
+		Foreground(emptyColor).
 		Render("Use arrow keys to move, numbers to fill, 'q' to quit")
 
 	if m.err != "" {
 		s += "\n" + lipgloss.NewStyle().
-			Foreground(lipgloss.Color("9")).
+			Foreground(userInputColor).
 			Render(m.err)
 	}
 
@@ -153,13 +153,6 @@ func (m model) renderBoard() string {
 				Width(3).
 				Align(lipgloss.Center)
 
-			if m.cursor[0] == i && m.cursor[1] == j {
-				style = style.
-					Background(highlightColor).
-					Foreground(lipgloss.Color("0")). // Black text for contrast
-					Bold(true)
-			}
-
 			cellContent := "·"
 			if cell != 0 {
 				cellContent = fmt.Sprintf("%d", cell)
@@ -170,6 +163,11 @@ func (m model) renderBoard() string {
 				}
 			} else {
 				style = style.Foreground(emptyColor)
+			}
+
+			if m.cursor[0] == i && m.cursor[1] == j {
+				cellContent = fmt.Sprintf("[%s]", cellContent)
+				style = style.Foreground(highlightColor).Bold(true)
 			}
 
 			boardView += style.Render(cellContent)
