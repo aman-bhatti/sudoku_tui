@@ -13,7 +13,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"github.com/charmbracelet/ssh"
 	"github.com/charmbracelet/wish"
@@ -27,12 +26,17 @@ const (
 	port = "22"
 )
 
-var (
-	highlightColor  = lipgloss.Color("#FF00FF") // Bright magenta
-	normalColor     = lipgloss.Color("#FFFFFF") // White
-	userInputColor  = lipgloss.Color("#FF0000") // Bright red
-	emptyColor      = lipgloss.Color("#444444") // Dark gray
-	boardBackground = lipgloss.Color("#000000") // Black
+// ANSI color codes
+const (
+	reset     = "\033[0m"
+	red       = "\033[31m"
+	green     = "\033[32m"
+	yellow    = "\033[33m"
+	blue      = "\033[34m"
+	magenta   = "\033[35m"
+	cyan      = "\033[36m"
+	white     = "\033[37m"
+	boldWhite = "\033[1;37m"
 )
 
 type model struct {
@@ -117,60 +121,42 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	s := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(normalColor).
-		Render("Sudoku") + "\n\n"
+	s := boldWhite + "Sudoku" + reset + "\n\n"
 
-	boardWithBackground := lipgloss.NewStyle().
-		Background(boardBackground).
-		Padding(1).
-		Render(m.renderBoard())
+	s += m.renderBoard() + "\n"
 
-	s += boardWithBackground + "\n"
-
-	s += lipgloss.NewStyle().
-		Foreground(emptyColor).
-		Render("Use arrow keys to move, numbers to fill, 'q' to quit")
+	s += white + "Use arrow keys to move, numbers to fill, 'q' to quit" + reset
 
 	if m.err != "" {
-		s += "\n" + lipgloss.NewStyle().
-			Foreground(userInputColor).
-			Render(m.err)
+		s += "\n" + red + m.err + reset
 	}
 
-	return lipgloss.NewStyle().
-		Width(m.width).
-		Height(m.height).
-		Render(s)
+	return s
 }
 
 func (m model) renderBoard() string {
 	var boardView string
 	for i, row := range m.board {
 		for j, cell := range row {
-			style := lipgloss.NewStyle().
-				Width(3).
-				Align(lipgloss.Center)
-
-			cellContent := "·"
-			if cell != 0 {
-				cellContent = fmt.Sprintf("%d", cell)
-				if m.initialBoard[i][j] != 0 {
-					style = style.Foreground(normalColor)
-				} else {
-					style = style.Foreground(userInputColor)
-				}
+			if m.cursor[0] == i && m.cursor[1] == j {
+				boardView += magenta + "[" + reset
 			} else {
-				style = style.Foreground(emptyColor)
+				boardView += " "
+			}
+
+			if cell == 0 {
+				boardView += cyan + "·" + reset
+			} else if m.initialBoard[i][j] != 0 {
+				boardView += white + fmt.Sprintf("%d", cell) + reset
+			} else {
+				boardView += red + fmt.Sprintf("%d", cell) + reset
 			}
 
 			if m.cursor[0] == i && m.cursor[1] == j {
-				cellContent = fmt.Sprintf("[%s]", cellContent)
-				style = style.Foreground(highlightColor).Bold(true)
+				boardView += magenta + "]" + reset
+			} else {
+				boardView += " "
 			}
-
-			boardView += style.Render(cellContent)
 
 			if j == 2 || j == 5 {
 				boardView += " "
