@@ -117,13 +117,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	// Title
 	s := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("15")).
 		Render("Sudoku") + "\n\n"
 
-	// Board rendering with a background applied
 	boardWithBackground := lipgloss.NewStyle().
 		Background(boardBackground).
 		Padding(1).
@@ -131,12 +129,10 @@ func (m model) View() string {
 
 	s += boardWithBackground + "\n"
 
-	// Instructions
 	s += lipgloss.NewStyle().
 		Foreground(lipgloss.Color("8")).
 		Render("Use arrow keys to move, numbers to fill, 'q' to quit")
 
-	// Error messages
 	if m.err != "" {
 		s += "\n" + lipgloss.NewStyle().
 			Foreground(lipgloss.Color("9")).
@@ -157,28 +153,27 @@ func (m model) renderBoard() string {
 				Width(3).
 				Align(lipgloss.Center)
 
-			// Highlight cursor position
 			if m.cursor[0] == i && m.cursor[1] == j {
 				style = style.
 					Background(highlightColor).
 					Foreground(lipgloss.Color("0")). // Black text for contrast
-					Bold(true).
-					Border(lipgloss.NormalBorder()).
-					BorderForeground(lipgloss.Color("15")) // White border
+					Bold(true)
 			}
 
-			// Render the cell
-			if cell == 0 {
-				boardView += style.Render("·")
-			} else if m.initialBoard[i][j] != 0 {
-				// Pre-filled numbers
-				boardView += style.Foreground(normalColor).Render(fmt.Sprintf("%d", cell))
+			cellContent := "·"
+			if cell != 0 {
+				cellContent = fmt.Sprintf("%d", cell)
+				if m.initialBoard[i][j] != 0 {
+					style = style.Foreground(normalColor)
+				} else {
+					style = style.Foreground(userInputColor)
+				}
 			} else {
-				// User-added numbers
-				boardView += style.Foreground(userInputColor).Render(fmt.Sprintf("%d", cell))
+				style = style.Foreground(emptyColor)
 			}
 
-			// Add spacing between 3x3 grids
+			boardView += style.Render(cellContent)
+
 			if j == 2 || j == 5 {
 				boardView += " "
 			}
@@ -206,7 +201,7 @@ func (m *model) moveCursor(direction string) {
 
 func (m *model) updateBoard() {
 	row, col := m.cursor[0], m.cursor[1]
-	if m.initialBoard[row][col] == 0 { // Only allow updates to cells that were initially empty
+	if m.initialBoard[row][col] == 0 {
 		num, _ := strconv.Atoi(m.userInput)
 		if isValid(m.board, row, col, num) {
 			m.board[row][col] = num
