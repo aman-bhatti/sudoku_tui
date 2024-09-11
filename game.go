@@ -242,29 +242,18 @@ func (m GameModel) renderGame() string {
 
 func (m GameModel) renderBoard() string {
 	var boardView string
-
 	for i := 0; i < sudokuLen; i++ {
 		row := ""
 		for j := 0; j < sudokuLen; j++ {
 			isError := m.errCoordinates[coordinate{i, j}]
-
-			// Get the value of the current cell
 			value := m.board[i][j]
 			cellValue := " "
 			if value != 0 {
 				cellValue = fmt.Sprintf("%d", value)
 			}
-
 			isInitial := m.initialBoard[i][j] != 0
-
-			// Apply custom cursor style if this is the cursor position
-			if m.cursor.row == i && m.cursor.col == j {
-				// Apply bold yellow background and black foreground
-				row += fmt.Sprintf("\033[1m\033[48;5;220m\033[30m%s\033[0m", cellValue) // Reset colors after rendering the cell
-			} else {
-				// Use the regular format for other cells
-				row += formatCell(isError, m.cursor.row == i && m.cursor.col == j, !isInitial, i, j, cellValue)
-			}
+			row += formatCell(isError, m.cursor.row == i && m.cursor.col == j,
+				!isInitial, i, j, cellValue)
 		}
 		boardView += formatRow(i, row) + "\n"
 	}
