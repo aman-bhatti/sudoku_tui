@@ -95,4 +95,3 @@ func teaHandler(s ssh.Session) (tea.Model, []tea.ProgramOption) {
 		tea.WithOutput(forceColorWriter{s}),
 	}
 }
-

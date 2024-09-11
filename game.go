@@ -126,7 +126,13 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, m.KeyMap.Number):
 			if m.state == Playing {
-				return m, m.set(m.cursor.row, m.cursor.col, int(msg.String()[0]-'0'))
+				cmd := m.set(m.cursor.row, m.cursor.col, int(msg.String()[0]-'0'))
+				if m.cellsLeft == 0 {
+					return m, tea.Sequence(cmd, func() tea.Msg {
+						return m.check()()
+					})
+				}
+				return m, cmd
 			}
 
 		case key.Matches(msg, m.KeyMap.Quit):
@@ -142,14 +148,21 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case GameWon:
 		m.state = Won
-		m.elapsedTimeOnWin = time.Since(m.startTime) // Track elapsed time on winning
+		m.elapsedTimeOnWin = time.Since(m.startTime)
 
 	case GameNeedsCorrection:
 		m.state = NeedsCorrection
+		return m, tea.Cmd(func() tea.Msg {
+			return ForceRender{}
+		})
+
+	case ForceRender:
+		// Do nothing, just trigger a re-render
 	}
 
 	return m, nil
 }
+
 func (m GameModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.KeyMap.Up):
@@ -157,13 +170,11 @@ func (m GameModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.KeyMap.Down):
 		m.selectedOption = (m.selectedOption + 1) % len(m.menuOptions)
 	case key.Matches(msg, m.KeyMap.Number), key.Matches(msg, key.NewBinding(key.WithKeys("enter"))):
-
 		switch m.selectedOption {
 		case 0: // Resume Game
 			m.state = Playing
 			return m, nil
 		case 1: // New Game
-			// Instead of quitting, transition back to the difficulty selection menu
 			return NewMenuModel(m.width, m.height), nil
 		case 2: // Quit
 			return m, tea.Quit
@@ -198,32 +209,73 @@ func (m GameModel) renderMenu() string {
 }
 
 func (m GameModel) renderWinScreen() string {
-	// Define styles for the box and text
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		Padding(1, 2).
-		BorderForeground(lipgloss.Color("#FFD700")) // Gold border
+		BorderForeground(lipgloss.Color("#FFD700"))
 
 	textStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#00FF00")). // Green text for the time
+		Foreground(lipgloss.Color("#00FF00")).
 		Bold(true)
 
 	titleStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FF4500")). // Orange text for the title
+		Foreground(lipgloss.Color("#FF4500")).
 		Bold(true).
 		Align(lipgloss.Center)
 
-	// Win message content
 	winMessage := fmt.Sprintf("%s\n\n%s\n\n%s",
 		titleStyle.Render("You Win!!!"),
 		textStyle.Render(fmt.Sprintf("Time: %02d:%02d", int(m.elapsedTimeOnWin.Minutes()), int(m.elapsedTimeOnWin.Seconds())%60)),
 		"Press 'q' to quit or 'm' for menu")
 
-	// Place the win message inside the styled box
 	boxedWinMessage := boxStyle.Render(winMessage)
 
-	// Center the box on the screen
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, boxedWinMessage)
+}
+
+func (m *GameModel) check() tea.Cmd {
+	return func() tea.Msg {
+		m.errCoordinates = make(map[coordinate]bool)
+		incorrectCellsFound := false
+
+		// Iterate over the entire board
+		for i := 0; i < sudokuLen; i++ {
+			for j := 0; j < sudokuLen; j++ {
+				if m.board[i][j] != m.solution[i][j] {
+					m.errCoordinates[coordinate{i, j}] = true
+					incorrectCellsFound = true
+				}
+			}
+		}
+
+		if incorrectCellsFound {
+			return GameNeedsCorrection{}
+		}
+		return GameWon{}
+	}
+}
+
+func (m GameModel) renderBoard() string {
+	var boardView string
+
+	for i := 0; i < sudokuLen; i++ {
+		row := ""
+		for j := 0; j < sudokuLen; j++ {
+			isError := m.errCoordinates[coordinate{i, j}]
+			value := m.board[i][j]
+			cellValue := " "
+			if value != 0 {
+				cellValue = fmt.Sprintf("%d", value)
+			}
+
+			isInitial := m.initialBoard[i][j] != 0
+			isCursor := m.cursor.row == i && m.cursor.col == j
+
+			row += formatCell(isError, isCursor, !isInitial, i, j, cellValue)
+		}
+		boardView += formatRow(i, row) + "\n"
+	}
+	return boardView
 }
 
 func (m GameModel) renderGame() string {
@@ -238,26 +290,6 @@ func (m GameModel) renderGame() string {
 
 	mainView := lipgloss.JoinVertical(lipgloss.Center, boardView, infoView, statusView)
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, mainView)
-}
-
-func (m GameModel) renderBoard() string {
-	var boardView string
-	for i := 0; i < sudokuLen; i++ {
-		row := ""
-		for j := 0; j < sudokuLen; j++ {
-			isError := m.errCoordinates[coordinate{i, j}]
-			value := m.board[i][j]
-			cellValue := " "
-			if value != 0 {
-				cellValue = fmt.Sprintf("%d", value)
-			}
-			isInitial := m.initialBoard[i][j] != 0
-			row += formatCell(isError, m.cursor.row == i && m.cursor.col == j,
-				!isInitial, i, j, cellValue)
-		}
-		boardView += formatRow(i, row) + "\n"
-	}
-	return boardView
 }
 
 func (m GameModel) renderInfo() string {
@@ -327,59 +359,6 @@ func (m *GameModel) set(row, col, value int) tea.Cmd {
 	return nil
 }
 
-func (m *GameModel) isValidMove(row, col, value int) bool {
-	// Check row
-	for i := 0; i < sudokuLen; i++ {
-		if m.board[row][i] == value {
-			return false
-		}
-	}
-
-	// Check column
-	for i := 0; i < sudokuLen; i++ {
-		if m.board[i][col] == value {
-			return false
-		}
-	}
-
-	// Check 3x3 box
-	startRow, startCol := 3*(row/3), 3*(col/3)
-	for i := 0; i < 3; i++ {
-		for j := 0; j < 3; j++ {
-			if m.board[i+startRow][j+startCol] == value {
-				return false
-			}
-		}
-	}
-
-	return true
-}
-
-func (m *GameModel) check() tea.Cmd {
-	return func() tea.Msg {
-		m.errCoordinates = make(map[coordinate]bool)
-		incorrectCellsFound := false
-
-		// Iterate over the entire board
-		for i := 0; i < sudokuLen; i++ {
-			for j := 0; j < sudokuLen; j++ {
-				if m.board[i][j] != m.solution[i][j] {
-					m.errCoordinates[coordinate{i, j}] = true
-					incorrectCellsFound = true
-				}
-			}
-		}
-
-		// Debugging: Check if the error coordinates are populated
-		fmt.Println("Error Coordinates:", m.errCoordinates)
-
-		// If incorrect cells were found, return the NeedsCorrection state
-		if incorrectCellsFound {
-			return GameNeedsCorrection{}
-		}
-		return GameWon{}
-	}
-}
-
 type GameWon struct{}
 type GameNeedsCorrection struct{}
+type ForceRender struct{}
