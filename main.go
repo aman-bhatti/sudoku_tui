@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
 	"os"
 	"os/signal"
@@ -10,12 +11,14 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"github.com/charmbracelet/ssh"
 	"github.com/charmbracelet/wish"
 	"github.com/charmbracelet/wish/activeterm"
 	bm "github.com/charmbracelet/wish/bubbletea"
 	"github.com/charmbracelet/wish/logging"
+	"github.com/muesli/termenv"
 )
 
 const (
@@ -72,7 +75,24 @@ func main() {
 	}
 }
 
+// forceColorWriter is a custom writer that forces color output
+type forceColorWriter struct {
+	w io.Writer
+}
+
+func (fcw forceColorWriter) Write(p []byte) (n int, err error) {
+	return fcw.w.Write(p)
+}
+
 func teaHandler(s ssh.Session) (tea.Model, []tea.ProgramOption) {
 	pty, _, _ := s.Pty()
-	return NewMenuModel(pty.Window.Width, pty.Window.Height), []tea.ProgramOption{tea.WithAltScreen()}
+
+	// Force color output
+	lipgloss.SetColorProfile(termenv.ANSI256)
+
+	return NewMenuModel(pty.Window.Width, pty.Window.Height), []tea.ProgramOption{
+		tea.WithAltScreen(),
+		tea.WithOutput(forceColorWriter{s}),
+	}
 }
+

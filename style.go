@@ -11,12 +11,12 @@ var (
 		if modifiable {
 			return lipgloss.NewStyle().
 				PaddingLeft(1).PaddingRight(1).
-				Background(lipgloss.Color("7")).
-				Foreground(lipgloss.Color("0")) // Modifiable cells: light background, black text
+				Background(lipgloss.Color("240")).
+				Foreground(lipgloss.Color("15")) // Modifiable cells: light gray background, white text
 		} else {
 			return lipgloss.NewStyle().
 				PaddingLeft(1).PaddingRight(1).
-				Background(lipgloss.Color("8")) // Non-modifiable cells: dark background
+				Background(lipgloss.Color("236")) // Non-modifiable cells: dark gray background
 		}
 	}
 
@@ -24,11 +24,11 @@ var (
 		if modifiable {
 			return lipgloss.NewStyle().
 				PaddingLeft(1).PaddingRight(1).
-				Background(lipgloss.Color("10")) // Modifiable cell with cursor: green background
+				Background(lipgloss.Color("34")) // Modifiable cell with cursor: green background
 		} else {
 			return lipgloss.NewStyle().
 				PaddingLeft(1).PaddingRight(1).
-				Background(lipgloss.Color("2")) // Non-modifiable cell with cursor: dark green background
+				Background(lipgloss.Color("22")) // Non-modifiable cell with cursor: dark green background
 		}
 	}
 
@@ -36,11 +36,11 @@ var (
 		if isCursor {
 			// Red background with white text when the cursor is on an error cell
 			return lipgloss.NewStyle().PaddingLeft(1).PaddingRight(1).
-				Background(lipgloss.Color("#FF6347")).Foreground(lipgloss.Color("#FFFFFF"))
+				Background(lipgloss.Color("160")).Foreground(lipgloss.Color("15"))
 		} else {
 			// Solid red background for non-cursor error cells
 			return lipgloss.NewStyle().PaddingLeft(1).PaddingRight(1).
-				Background(lipgloss.Color("#FF0000")).Foreground(lipgloss.Color("#FFFFFF"))
+				Background(lipgloss.Color("196")).Foreground(lipgloss.Color("15"))
 		}
 	}
 
@@ -80,4 +80,3 @@ var (
 	// Style for the cells left and info text at the bottom
 	cellsLeftStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Margin(1, 0, 0, 0)
 )
-
