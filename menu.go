@@ -2,9 +2,8 @@ package main
 
 import (
 	"fmt"
-	"strings"
-
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type Difficulty int
@@ -68,7 +67,7 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m MenuModel) View() string {
-	s := boldWhite + "Sudoku Game" + reset + "\n\n"
+	s := lipgloss.NewStyle().Foreground(lipgloss.Color("201")).Bold(true).Render("SUDOKU BUILT BY AMAN") + "\n\n"
 	s += "Select difficulty:\n\n"
 
 	for i, choice := range m.choices {
@@ -76,16 +75,27 @@ func (m MenuModel) View() string {
 		if m.cursor == i {
 			cursor = ">"
 		}
-		s += fmt.Sprintf("%s %s\n", cursor, choice)
+		choiceStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
+		if m.cursor == i {
+			choiceStyle = choiceStyle.Foreground(lipgloss.Color("212")).Bold(true)
+		}
+		s += fmt.Sprintf("%s %s\n", cursor, choiceStyle.Render(choice))
 	}
 
-	// Center the menu
-	lines := strings.Split(s, "\n")
-	centeredLines := make([]string, len(lines))
-	for i, line := range lines {
-		centeredLines[i] = centerText(line, m.width)
-	}
+	// Create a box for the menu
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("201")).
+		Padding(2, 4).
+		BorderTop(true).
+		BorderLeft(true).
+		BorderRight(true).
+		BorderBottom(true)
 
-	return strings.Join(centeredLines, "\n")
+	menu := boxStyle.Render(s)
+
+	// Center the menu both vertically and horizontally
+	return lipgloss.Place(m.width, m.height,
+		lipgloss.Center, lipgloss.Center,
+		menu)
 }
-
