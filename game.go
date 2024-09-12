@@ -211,20 +211,22 @@ func (m GameModel) renderMenu() string {
 func (m GameModel) renderWinScreen() string {
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		Padding(1, 2).
-		BorderForeground(lipgloss.Color("#FFD700"))
+		Padding(2, 6).
+		BorderBackground(lipgloss.Color("11")).
+		BorderForeground(lipgloss.Color("11")).
+		Background(lipgloss.Color("11"))
 
 	textStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#00FF00")).
+		Foreground(lipgloss.Color("0")).
 		Bold(true)
 
 	titleStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FF4500")).
+		Foreground(lipgloss.Color("196")).
 		Bold(true).
 		Align(lipgloss.Center)
 
 	winMessage := fmt.Sprintf("%s\n\n%s\n\n%s",
-		titleStyle.Render("You Win!!!"),
+		titleStyle.Bold(true).Render("You Win!!!"),
 		textStyle.Render(fmt.Sprintf("Time: %02d:%02d", int(m.elapsedTimeOnWin.Minutes()), int(m.elapsedTimeOnWin.Seconds())%60)),
 		"Press 'q' to quit or 'm' for menu")
 

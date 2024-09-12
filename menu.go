@@ -67,17 +67,17 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m MenuModel) View() string {
-	s := lipgloss.NewStyle().Foreground(lipgloss.Color("201")).Bold(true).Render("SUDOKU BUILT BY AMAN") + "\n\n"
-	s += "Select difficulty:\n\n"
+	s := lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Bold(true).Render("SUDOKU BUILT BY AMAN") + "\n\n"
+	s += lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(lipgloss.Color("11")).Render("Select difficulty:") + "\n"
 
 	for i, choice := range m.choices {
 		cursor := " "
 		if m.cursor == i {
 			cursor = ">"
 		}
-		choiceStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
+		choiceStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("0"))
 		if m.cursor == i {
-			choiceStyle = choiceStyle.Foreground(lipgloss.Color("212")).Bold(true)
+			choiceStyle = choiceStyle.Foreground(lipgloss.Color("201")).Bold(true)
 		}
 		s += fmt.Sprintf("%s %s\n", cursor, choiceStyle.Render(choice))
 	}
@@ -85,8 +85,10 @@ func (m MenuModel) View() string {
 	// Create a box for the menu
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("201")).
-		Padding(2, 4).
+		BorderForeground(lipgloss.Color("11")).
+		BorderBackground(lipgloss.Color("11")).
+		Background(lipgloss.Color("11")).
+		Padding(2, 9).
 		BorderTop(true).
 		BorderLeft(true).
 		BorderRight(true).
