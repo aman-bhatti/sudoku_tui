@@ -305,7 +305,10 @@ func (m GameModel) renderInfo() string {
 	info += "\n? toggle help • q/esc quit • m menu • c clear all\n"
 	info += fmt.Sprintf("\nSudoku - %s\n", m.difficulty)
 	info += "\nUse arrow keys to move, numbers to fill"
-	return cellsLeftStyle.Render(info)
+
+	whiteTextStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
+
+	return cellsLeftStyle.Render(whiteTextStyle.Render(info))
 }
 
 func (m *GameModel) cursorDown() {
