@@ -15,6 +15,7 @@ type KeyMap struct {
 	Number          key.Binding
 	Menu            key.Binding
 	ViewLeaderboard key.Binding
+	AdminMode       key.Binding
 }
 
 func (k KeyMap) ShortHelp() []key.Binding {
@@ -67,5 +68,9 @@ var Keys = KeyMap{
 	ViewLeaderboard: key.NewBinding(
 		key.WithKeys("b"),
 		key.WithHelp("b", "view leaderboard"),
+	),
+	AdminMode: key.NewBinding(
+		key.WithKeys("a"),
+		key.WithHelp("a", "enter admin mode"),
 	),
 }

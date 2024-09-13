@@ -155,12 +155,12 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case m.state == ViewingLeaderboard:
-			if msg.String() == "a" && !m.adminMode {
+			if key.Matches(msg, m.KeyMap.AdminMode) && !m.adminMode {
 				if m.adminPassword == "" {
 					fmt.Println("Admin mode is disabled. Please create an admin_password.txt file to enable it.")
 				} else {
 					m.state = AdminPasswordEntry
-					fmt.Println("Entering admin password entry mode.") // Debug output
+					fmt.Println("Entering admin password entry mode.")
 				}
 				return m, nil
 			} else if m.adminMode {
