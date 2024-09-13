@@ -24,6 +24,7 @@ const (
 	Won
 	NeedsCorrection
 	InMenu
+	ViewingLeaderboard
 )
 
 type GameModel struct {
@@ -45,6 +46,9 @@ type GameModel struct {
 	selectedOption   int
 	elapsedTimeOnWin time.Duration
 	blinkOn          bool
+	leaderboard      *Leaderboard
+	playerName       string
+	nameEntered      bool
 }
 
 type setBackgroundColorMsg struct {
@@ -70,6 +74,12 @@ func NewGameModel(width, height int, difficulty Difficulty) *GameModel {
 		}
 	}
 
+	leaderboard, err := LoadLeaderboardFromFile("sudoku_leaderboard.json")
+	if err != nil {
+		// Handle error (maybe log it)
+		leaderboard = NewLeaderboard()
+	}
+
 	return &GameModel{
 		board:           board,
 		solution:        solution,
@@ -84,13 +94,16 @@ func NewGameModel(width, height int, difficulty Difficulty) *GameModel {
 		originalBgColor: env.BackgroundColor(),
 		output:          env.DefaultOutput(),
 		state:           Playing,
-		menuOptions:     []string{"Resume Game", "New Game", "Quit"},
+		menuOptions:     []string{"Resume Game", "New Game", "View Leaderboard", "Quit"},
 		selectedOption:  0,
+		leaderboard:     leaderboard,
+		playerName:      "",
+		nameEntered:     false,
 	}
 }
 
 func (m GameModel) Init() tea.Cmd {
-	return setBackgroundColor(env.RGBColor("#1e1e1e")) // Dark background color
+	return setBackgroundColor(env.RGBColor("#1e1e1e"))
 }
 
 func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -104,8 +117,34 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case m.state == InMenu:
 			return m.updateMenu(msg)
 
+		case m.state == Won:
+			if !m.nameEntered {
+				switch msg.Type {
+				case tea.KeyEnter:
+					if m.playerName != "" {
+						m.nameEntered = true
+						m.SaveScore()
+						m.state = ViewingLeaderboard
+						return m, nil
+					}
+				case tea.KeyBackspace:
+					if len(m.playerName) > 0 {
+						m.playerName = m.playerName[:len(m.playerName)-1]
+					}
+				case tea.KeyRunes:
+					if len(m.playerName) < 20 { // Limit name length
+						m.playerName += string(msg.Runes)
+					}
+				}
+			}
+
+		case m.state == ViewingLeaderboard:
+			if msg.Type == tea.KeyEsc || msg.String() == "q" {
+				return NewMenuModel(m.width, m.height), nil
+			}
+
 		case key.Matches(msg, m.KeyMap.Menu):
-			m.state = InMenu // Pressing "m" will switch to menu state
+			m.state = InMenu
 
 		case key.Matches(msg, m.KeyMap.Down):
 			m.cursorDown()
@@ -140,6 +179,12 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				setBackgroundColor(m.originalBgColor),
 				tea.Quit,
 			)
+
+		case key.Matches(msg, m.KeyMap.ViewLeaderboard):
+			if m.state == Playing {
+				m.state = ViewingLeaderboard
+				return m, nil
+			}
 		}
 
 	case tea.WindowSizeMsg:
@@ -176,7 +221,10 @@ func (m GameModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case 1: // New Game
 			return NewMenuModel(m.width, m.height), nil
-		case 2: // Quit
+		case 2: // View Leaderboard
+			m.state = ViewingLeaderboard
+			return m, nil
+		case 3: // Quit
 			return m, tea.Quit
 		}
 	}
@@ -189,6 +237,8 @@ func (m GameModel) View() string {
 		return m.renderMenu()
 	case Won:
 		return m.renderWinScreen()
+	case ViewingLeaderboard:
+		return m.renderLeaderboard()
 	default:
 		return m.renderGame()
 	}
@@ -225,36 +275,67 @@ func (m GameModel) renderWinScreen() string {
 		Bold(true).
 		Align(lipgloss.Center)
 
-	winMessage := fmt.Sprintf("%s\n\n%s\n\n%s",
+	namePrompt := "Enter your name: "
+	if m.nameEntered {
+		namePrompt = fmt.Sprintf("Name: %s", m.playerName)
+	}
+
+	var instructionText string
+	if m.nameEntered {
+		instructionText = "Press Enter to save score"
+	} else {
+		instructionText = "Type your name and press Enter"
+	}
+
+	winMessage := fmt.Sprintf("%s\n\n%s\n\n%s\n\n%s",
 		titleStyle.Bold(true).Render("You Win!!!"),
 		textStyle.Render(fmt.Sprintf("Time: %02d:%02d", int(m.elapsedTimeOnWin.Minutes()), int(m.elapsedTimeOnWin.Seconds())%60)),
-		"Press 'q' to quit or 'm' for menu")
+		textStyle.Render(namePrompt+m.playerName),
+		textStyle.Render(instructionText))
 
 	boxedWinMessage := boxStyle.Render(winMessage)
 
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, boxedWinMessage)
 }
 
-func (m *GameModel) check() tea.Cmd {
-	return func() tea.Msg {
-		m.errCoordinates = make(map[coordinate]bool)
-		incorrectCellsFound := false
+func (m GameModel) renderLeaderboard() string {
+	topScores := m.leaderboard.GetTopScores(m.difficulty, 10)
 
-		// Iterate over the entire board
-		for i := 0; i < sudokuLen; i++ {
-			for j := 0; j < sudokuLen; j++ {
-				if m.board[i][j] != m.solution[i][j] {
-					m.errCoordinates[coordinate{i, j}] = true
-					incorrectCellsFound = true
-				}
-			}
-		}
+	var s strings.Builder
+	s.WriteString(fmt.Sprintf("Leaderboard - %s\n\n", m.difficulty))
+	s.WriteString(fmt.Sprintf("%-4s %-20s %-10s %-10s\n", "Rank", "Name", "Time", "Date"))
+	s.WriteString(fmt.Sprintf("%-4s %-20s %-10s %-10s\n", "----", "----", "----", "----"))
 
-		if incorrectCellsFound {
-			return GameNeedsCorrection{}
-		}
-		return GameWon{}
+	for i, entry := range topScores {
+		formattedTime := formatDuration(entry.Time)
+		formattedDate := entry.Date.Format("2006-01-02")
+		s.WriteString(fmt.Sprintf("%-4d %-20s %-10s %-10s\n",
+			i+1,
+			truncateString(entry.Name, 20),
+			formattedTime,
+			formattedDate,
+		))
 	}
+
+	s.WriteString("\nPress 'q' or 'esc' to return to menu")
+
+	return lipgloss.Place(m.width, m.height,
+		lipgloss.Center, lipgloss.Center,
+		s.String())
+}
+
+func (m GameModel) renderGame() string {
+	boardView := m.renderBoard()
+	infoView := m.renderInfo()
+
+	var statusView string
+	switch m.state {
+	case NeedsCorrection:
+		statusView = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Render("The solution is incorrect. Please check the highlighted cells and try again.")
+	}
+
+	mainView := lipgloss.JoinVertical(lipgloss.Center, boardView, infoView, statusView)
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, mainView)
 }
 
 func (m GameModel) renderBoard() string {
@@ -280,20 +361,6 @@ func (m GameModel) renderBoard() string {
 	return boardView
 }
 
-func (m GameModel) renderGame() string {
-	boardView := m.renderBoard()
-	infoView := m.renderInfo()
-
-	var statusView string
-	switch m.state {
-	case NeedsCorrection:
-		statusView = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Render("The solution is incorrect. Please check the highlighted cells and try again.")
-	}
-
-	mainView := lipgloss.JoinVertical(lipgloss.Center, boardView, infoView, statusView)
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, mainView)
-}
-
 func (m GameModel) renderInfo() string {
 	var elapsedTime time.Duration
 	if m.state == Won {
@@ -304,7 +371,7 @@ func (m GameModel) renderInfo() string {
 
 	info := fmt.Sprintf("Cells left: %d\n", m.cellsLeft)
 	info += fmt.Sprintf("Elapsed time: %02d:%02d\n", int(elapsedTime.Minutes()), int(elapsedTime.Seconds())%60)
-	info += "\n? toggle help • q/esc quit • m menu • c clear all\n"
+	info += "\n• q/esc quit • m menu • b leaderboard\n"
 	info += fmt.Sprintf("\nSudoku - %s\n", m.difficulty)
 	info += "\nUse arrow keys to move, numbers to fill"
 
@@ -364,6 +431,57 @@ func (m *GameModel) set(row, col, value int) tea.Cmd {
 	return nil
 }
 
+func (m *GameModel) check() tea.Cmd {
+	return func() tea.Msg {
+		m.errCoordinates = make(map[coordinate]bool)
+		incorrectCellsFound := false
+
+		// Iterate over the entire board
+		for i := 0; i < sudokuLen; i++ {
+			for j := 0; j < sudokuLen; j++ {
+				if m.board[i][j] != m.solution[i][j] {
+					m.errCoordinates[coordinate{i, j}] = true
+					incorrectCellsFound = true
+				}
+			}
+		}
+
+		if incorrectCellsFound {
+			return GameNeedsCorrection{}
+		}
+		return GameWon{}
+	}
+}
+
+func (m *GameModel) SaveScore() {
+	if m.playerName != "" {
+		m.leaderboard.AddEntry(m.playerName, m.elapsedTimeOnWin, m.difficulty)
+		err := m.leaderboard.SaveToFile("sudoku_leaderboard.json")
+		if err != nil {
+			// Handle error (maybe log it)
+			fmt.Println("Error saving leaderboard:", err)
+		}
+	}
+	m.nameEntered = false
+}
+
+// Helper function to format duration as "Xm Ys"
+func formatDuration(d time.Duration) string {
+	m := d / time.Minute
+	d -= m * time.Minute
+	s := d / time.Second
+	return fmt.Sprintf("%dm %ds", m, s)
+}
+
+// Helper function to truncate string if it's too long
+func truncateString(s string, maxLength int) string {
+	if len(s) <= maxLength {
+		return s
+	}
+	return s[:maxLength-3] + "..."
+}
+
 type GameWon struct{}
 type GameNeedsCorrection struct{}
 type ForceRender struct{}
+

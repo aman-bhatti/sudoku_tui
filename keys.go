@@ -5,15 +5,16 @@ import (
 )
 
 type KeyMap struct {
-	Up     key.Binding
-	Down   key.Binding
-	Left   key.Binding
-	Right  key.Binding
-	Help   key.Binding
-	Quit   key.Binding
-	Clear  key.Binding
-	Number key.Binding
-	Menu   key.Binding
+	Up              key.Binding
+	Down            key.Binding
+	Left            key.Binding
+	Right           key.Binding
+	Help            key.Binding
+	Quit            key.Binding
+	Clear           key.Binding
+	Number          key.Binding
+	Menu            key.Binding
+	ViewLeaderboard key.Binding
 }
 
 func (k KeyMap) ShortHelp() []key.Binding {
@@ -63,4 +64,8 @@ var Keys = KeyMap{
 		key.WithHelp("", "set cell to number"),
 	),
 	Menu: key.NewBinding(key.WithKeys("m")), // Add this line for the "m" key
+	ViewLeaderboard: key.NewBinding(
+		key.WithKeys("b"),
+		key.WithHelp("b", "view leaderboard"),
+	),
 }
