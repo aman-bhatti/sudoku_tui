@@ -2,13 +2,14 @@ package main
 
 import (
 	"fmt"
-	"strings"
-	"time"
-
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	env "github.com/muesli/termenv"
+	"io/ioutil"
+	"log"
+	"strings"
+	"time"
 )
 
 const sudokuLen = 9
@@ -25,30 +26,36 @@ const (
 	NeedsCorrection
 	InMenu
 	ViewingLeaderboard
+	AdminPasswordEntry
+	AdminLeaderboardEdit
 )
 
 type GameModel struct {
-	board            [sudokuLen][sudokuLen]int
-	solution         [sudokuLen][sudokuLen]int
-	initialBoard     [sudokuLen][sudokuLen]int
-	KeyMap           KeyMap
-	cursor           coordinate
-	cellsLeft        int
-	errCoordinates   map[coordinate]bool
-	startTime        time.Time
-	width, height    int
-	difficulty       Difficulty
-	Err              error
-	originalBgColor  env.Color
-	output           *env.Output
-	state            GameState
-	menuOptions      []string
-	selectedOption   int
-	elapsedTimeOnWin time.Duration
-	blinkOn          bool
-	leaderboard      *Leaderboard
-	playerName       string
-	nameEntered      bool
+	board                    [sudokuLen][sudokuLen]int
+	solution                 [sudokuLen][sudokuLen]int
+	initialBoard             [sudokuLen][sudokuLen]int
+	KeyMap                   KeyMap
+	cursor                   coordinate
+	cellsLeft                int
+	errCoordinates           map[coordinate]bool
+	startTime                time.Time
+	width, height            int
+	difficulty               Difficulty
+	Err                      error
+	originalBgColor          env.Color
+	output                   *env.Output
+	state                    GameState
+	menuOptions              []string
+	selectedOption           int
+	elapsedTimeOnWin         time.Duration
+	blinkOn                  bool
+	leaderboard              *Leaderboard
+	playerName               string
+	nameEntered              bool
+	adminPassword            string
+	adminPasswordAttempt     string
+	adminMode                bool
+	selectedLeaderboardEntry int
 }
 
 type setBackgroundColorMsg struct {
@@ -74,6 +81,11 @@ func NewGameModel(width, height int, difficulty Difficulty) *GameModel {
 		}
 	}
 
+	adminPassword, err := ioutil.ReadFile("admin_password.txt")
+	if err != nil {
+		log.Println("Warning: Could not read admin password file. Admin mode will be disabled.")
+	}
+
 	leaderboard, err := LoadLeaderboardFromFile("sudoku_leaderboard.json")
 	if err != nil {
 		// Handle error (maybe log it)
@@ -81,24 +93,28 @@ func NewGameModel(width, height int, difficulty Difficulty) *GameModel {
 	}
 
 	return &GameModel{
-		board:           board,
-		solution:        solution,
-		initialBoard:    initialBoard,
-		KeyMap:          Keys,
-		cellsLeft:       cellsLeft,
-		errCoordinates:  make(map[coordinate]bool),
-		startTime:       time.Now(),
-		width:           width,
-		height:          height,
-		difficulty:      difficulty,
-		originalBgColor: env.BackgroundColor(),
-		output:          env.DefaultOutput(),
-		state:           Playing,
-		menuOptions:     []string{"Resume Game", "New Game", "View Leaderboard", "Quit"},
-		selectedOption:  0,
-		leaderboard:     leaderboard,
-		playerName:      "",
-		nameEntered:     false,
+		board:                    board,
+		solution:                 solution,
+		initialBoard:             initialBoard,
+		KeyMap:                   Keys,
+		cellsLeft:                cellsLeft,
+		errCoordinates:           make(map[coordinate]bool),
+		startTime:                time.Now(),
+		width:                    width,
+		height:                   height,
+		difficulty:               difficulty,
+		originalBgColor:          env.BackgroundColor(),
+		output:                   env.DefaultOutput(),
+		state:                    Playing,
+		menuOptions:              []string{"Resume Game", "New Game", "View Leaderboard", "Quit"},
+		selectedOption:           0,
+		leaderboard:              leaderboard,
+		playerName:               "",
+		nameEntered:              false,
+		adminPassword:            strings.TrimSpace(string(adminPassword)),
+		adminPasswordAttempt:     "",
+		adminMode:                false,
+		selectedLeaderboardEntry: 0,
 	}
 }
 
@@ -139,8 +155,55 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case m.state == ViewingLeaderboard:
-			if msg.Type == tea.KeyEsc || msg.String() == "q" {
+			if msg.String() == "a" && !m.adminMode {
+				if m.adminPassword == "" {
+					fmt.Println("Admin mode is disabled. Please create an admin_password.txt file to enable it.")
+				} else {
+					m.state = AdminPasswordEntry
+					fmt.Println("Entering admin password entry mode.") // Debug output
+				}
+				return m, nil
+			} else if m.adminMode {
+				switch msg.String() {
+				case "up", "k":
+					m.selectedLeaderboardEntry = max(0, m.selectedLeaderboardEntry-1)
+				case "down", "j":
+					m.selectedLeaderboardEntry = min(len(m.leaderboard.Entries)-1, m.selectedLeaderboardEntry+1)
+				case "d":
+					m.leaderboard.DeleteEntry(m.selectedLeaderboardEntry)
+					m.leaderboard.SaveToFile("sudoku_leaderboard.json")
+					m.selectedLeaderboardEntry = max(0, m.selectedLeaderboardEntry-1)
+				case "q", "esc":
+					m.adminMode = false
+					m.selectedLeaderboardEntry = 0
+				}
+			} else if msg.Type == tea.KeyEsc || msg.String() == "q" {
 				return NewMenuModel(m.width, m.height), nil
+			}
+
+		case m.state == AdminPasswordEntry:
+			switch msg.Type {
+			case tea.KeyEnter:
+				if strings.TrimSpace(m.adminPasswordAttempt) == strings.TrimSpace(m.adminPassword) {
+					m.adminMode = true
+					m.state = ViewingLeaderboard
+					m.adminPasswordAttempt = ""          // Clear the password attempt
+					fmt.Println("Admin mode activated.") // Debug output
+					return m, nil
+				} else {
+					m.adminPasswordAttempt = ""
+					fmt.Println("Incorrect password. Please try again.") // Feedback for incorrect password
+				}
+			case tea.KeyBackspace:
+				if len(m.adminPasswordAttempt) > 0 {
+					m.adminPasswordAttempt = m.adminPasswordAttempt[:len(m.adminPasswordAttempt)-1]
+				}
+			case tea.KeyRunes:
+				m.adminPasswordAttempt += string(msg.Runes)
+			case tea.KeyEsc:
+				m.state = ViewingLeaderboard
+				m.adminPasswordAttempt = ""
+				return m, nil
 			}
 
 		case key.Matches(msg, m.KeyMap.Menu):
@@ -239,6 +302,8 @@ func (m GameModel) View() string {
 		return m.renderWinScreen()
 	case ViewingLeaderboard:
 		return m.renderLeaderboard()
+	case AdminPasswordEntry:
+		return m.renderAdminPasswordEntry()
 	default:
 		return m.renderGame()
 	}
@@ -309,19 +374,40 @@ func (m GameModel) renderLeaderboard() string {
 	for i, entry := range topScores {
 		formattedTime := formatDuration(entry.Time)
 		formattedDate := entry.Date.Format("2006-01-02")
-		s.WriteString(fmt.Sprintf("%-4d %-20s %-10s %-10s\n",
+		line := fmt.Sprintf("%-4d %-20s %-10s %-10s",
 			i+1,
 			truncateString(entry.Name, 20),
 			formattedTime,
 			formattedDate,
-		))
+		)
+		if m.adminMode && i == m.selectedLeaderboardEntry {
+			line = "> " + line
+		} else {
+			line = "  " + line
+		}
+		s.WriteString(line + "\n")
 	}
 
-	s.WriteString("\nPress 'q' or 'esc' to return to menu")
+	if m.adminMode {
+		s.WriteString("\nAdmin Mode: Use up/down to select, 'd' to delete, 'q' to exit admin mode")
+	} else {
+		s.WriteString("\nPress 'a' for admin mode, 'q' or 'esc' to return to menu")
+	}
 
 	return lipgloss.Place(m.width, m.height,
 		lipgloss.Center, lipgloss.Center,
 		s.String())
+}
+
+func (m GameModel) renderAdminPasswordEntry() string {
+	prompt := "Enter admin password: "
+	maskedPassword := strings.Repeat("*", len(m.adminPasswordAttempt))
+
+	message := fmt.Sprintf("%s%s\n\nPress Enter to submit or Esc to cancel", prompt, maskedPassword)
+
+	return lipgloss.Place(m.width, m.height,
+		lipgloss.Center, lipgloss.Center,
+		message)
 }
 
 func (m GameModel) renderGame() string {
@@ -371,7 +457,7 @@ func (m GameModel) renderInfo() string {
 
 	info := fmt.Sprintf("Cells left: %d\n", m.cellsLeft)
 	info += fmt.Sprintf("Elapsed time: %02d:%02d\n", int(elapsedTime.Minutes()), int(elapsedTime.Seconds())%60)
-	info += "\n• q/esc quit • m menu • b leaderboard\n"
+	info += "\n? toggle help • q/esc quit • m menu • l leaderboard • c clear all\n"
 	info += fmt.Sprintf("\nSudoku - %s\n", m.difficulty)
 	info += "\nUse arrow keys to move, numbers to fill"
 
@@ -462,6 +548,7 @@ func (m *GameModel) SaveScore() {
 			fmt.Println("Error saving leaderboard:", err)
 		}
 	}
+	// Reset name entry state
 	m.nameEntered = false
 }
 
@@ -481,7 +568,21 @@ func truncateString(s string, maxLength int) string {
 	return s[:maxLength-3] + "..."
 }
 
+// Helper functions for admin mode
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 type GameWon struct{}
 type GameNeedsCorrection struct{}
 type ForceRender struct{}
-

@@ -1,4 +1,6 @@
 .ssh/
 
 
+admin_password.txt
+
 *.json

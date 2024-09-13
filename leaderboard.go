@@ -48,6 +48,16 @@ func (l *Leaderboard) SaveToFile(filename string) error {
 	return ioutil.WriteFile(filename, data, 0644)
 }
 
+func (l *Leaderboard) DeleteEntry(index int) {
+	if index >= 0 && index < len(l.Entries) {
+		// Remove the entry at the specified index
+		l.Entries = append(l.Entries[:index], l.Entries[index+1:]...)
+	}
+	sort.Slice(l.Entries, func(i, j int) bool {
+		return l.Entries[i].Time < l.Entries[j].Time
+	})
+}
+
 func LoadLeaderboardFromFile(filename string) (*Leaderboard, error) {
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
