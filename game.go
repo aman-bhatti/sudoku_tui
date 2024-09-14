@@ -2,47 +2,20 @@ package main
 
 import (
 	"fmt"
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	env "github.com/muesli/termenv"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/charmbracelet/bubbles/key"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	env "github.com/muesli/termenv"
 )
 
 const sudokuLen = 9
-
 const adminPasswordFileName = "admin_password.txt"
-
-func findAdminPasswordFile() (string, error) {
-	// Try current directory first
-	if _, err := os.Stat(adminPasswordFileName); err == nil {
-		return adminPasswordFileName, nil
-	}
-
-	// Try the directory of the executable
-	exePath, err := os.Executable()
-	if err == nil {
-		exeDir := filepath.Dir(exePath)
-		filePath := filepath.Join(exeDir, adminPasswordFileName)
-		if _, err := os.Stat(filePath); err == nil {
-			return filePath, nil
-		}
-	}
-
-	// Try home directory
-	homeDir, err := os.UserHomeDir()
-	if err == nil {
-		filePath := filepath.Join(homeDir, adminPasswordFileName)
-		if _, err := os.Stat(filePath); err == nil {
-			return filePath, nil
-		}
-	}
-
-	return "", fmt.Errorf("admin password file not found")
-}
 
 type coordinate struct {
 	row, col int
@@ -86,7 +59,6 @@ type GameModel struct {
 	adminPasswordAttempt     string
 	adminMode                bool
 	selectedLeaderboardEntry int
-	adminModeBuffer          string
 	debugInfo                []string
 }
 
@@ -98,6 +70,45 @@ func setBackgroundColor(c env.Color) tea.Cmd {
 	return func() tea.Msg {
 		return setBackgroundColorMsg{color: c}
 	}
+}
+
+func findAdminPasswordFile() (string, []string, error) {
+	var debugInfo []string
+
+	// Current directory
+	pwd, _ := os.Getwd()
+	debugInfo = append(debugInfo, fmt.Sprintf("Current directory: %s", pwd))
+	filePath := filepath.Join(pwd, adminPasswordFileName)
+	if _, err := os.Stat(filePath); err == nil {
+		return filePath, debugInfo, nil
+	}
+
+	// Executable directory
+	exePath, err := os.Executable()
+	if err == nil {
+		exeDir := filepath.Dir(exePath)
+		debugInfo = append(debugInfo, fmt.Sprintf("Executable directory: %s", exeDir))
+		filePath := filepath.Join(exeDir, adminPasswordFileName)
+		if _, err := os.Stat(filePath); err == nil {
+			return filePath, debugInfo, nil
+		}
+	} else {
+		debugInfo = append(debugInfo, fmt.Sprintf("Error getting executable path: %v", err))
+	}
+
+	// Home directory
+	homeDir, err := os.UserHomeDir()
+	if err == nil {
+		debugInfo = append(debugInfo, fmt.Sprintf("Home directory: %s", homeDir))
+		filePath := filepath.Join(homeDir, adminPasswordFileName)
+		if _, err := os.Stat(filePath); err == nil {
+			return filePath, debugInfo, nil
+		}
+	} else {
+		debugInfo = append(debugInfo, fmt.Sprintf("Error getting home directory: %v", err))
+	}
+
+	return "", debugInfo, fmt.Errorf("admin password file not found")
 }
 
 func NewGameModel(width, height int, difficulty Difficulty) *GameModel {
@@ -113,15 +124,22 @@ func NewGameModel(width, height int, difficulty Difficulty) *GameModel {
 		}
 	}
 
+	leaderboard, err := LoadLeaderboardFromFile("sudoku_leaderboard.json")
+	if err != nil {
+		// Handle error (maybe log it)
+		leaderboard = NewLeaderboard()
+	}
+
 	var adminPassword string
 	var debugInfo []string
 
-	passwordFilePath, err := findAdminPasswordFile()
+	passwordFilePath, dirInfo, err := findAdminPasswordFile()
+	debugInfo = append(debugInfo, dirInfo...) // Always add directory info to debug
 	if err != nil {
 		debugInfo = append(debugInfo, fmt.Sprintf("Error finding admin password file: %v", err))
 	} else {
 		debugInfo = append(debugInfo, fmt.Sprintf("Admin password file found at: %s", passwordFilePath))
-		content, err := os.ReadFile(passwordFilePath)
+		content, err := ioutil.ReadFile(passwordFilePath)
 		if err != nil {
 			debugInfo = append(debugInfo, fmt.Sprintf("Error reading admin password file: %v", err))
 		} else {
@@ -130,10 +148,12 @@ func NewGameModel(width, height int, difficulty Difficulty) *GameModel {
 		}
 	}
 
-	leaderboard, err := LoadLeaderboardFromFile("sudoku_leaderboard.json")
-	if err != nil {
-		// Handle error (maybe log it)
-		leaderboard = NewLeaderboard()
+	return &GameModel{
+		// ... other fields ...
+		adminPassword:        adminPassword,
+		adminPasswordAttempt: "",
+		adminMode:            false,
+		debugInfo:            debugInfo,
 	}
 
 	return &GameModel{
@@ -155,17 +175,39 @@ func NewGameModel(width, height int, difficulty Difficulty) *GameModel {
 		leaderboard:              leaderboard,
 		playerName:               "",
 		nameEntered:              false,
-		adminPassword:            strings.TrimSpace(string(adminPassword)),
+		adminPassword:            adminPassword,
 		adminPasswordAttempt:     "",
 		adminMode:                false,
 		selectedLeaderboardEntry: 0,
-		adminModeBuffer:          "",
-		debugInfo:                make([]string, 0),
+		debugInfo:                debugInfo,
 	}
 }
 
 func (m GameModel) Init() tea.Cmd {
 	return setBackgroundColor(env.RGBColor("#1e1e1e"))
+}
+
+func (m GameModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.KeyMap.Up):
+		m.selectedOption = (m.selectedOption - 1 + len(m.menuOptions)) % len(m.menuOptions)
+	case key.Matches(msg, m.KeyMap.Down):
+		m.selectedOption = (m.selectedOption + 1) % len(m.menuOptions)
+	case key.Matches(msg, m.KeyMap.Number), key.Matches(msg, key.NewBinding(key.WithKeys("enter"))):
+		switch m.selectedOption {
+		case 0: // Resume Game
+			m.state = Playing
+			return m, nil
+		case 1: // New Game
+			return NewMenuModel(m.width, m.height), nil
+		case 2: // View Leaderboard
+			m.state = ViewingLeaderboard
+			return m, nil
+		case 3: // Quit
+			return m, tea.Quit
+		}
+	}
+	return m, nil
 }
 
 func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -175,11 +217,11 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		debugMsg := fmt.Sprintf("Key pressed - Type: %v, Runes: %v, String: %s", msg.Type, msg.Runes, msg.String())
-		m.debugInfo = append(m.debugInfo, debugMsg)
-		if len(m.debugInfo) > 5 {
-			m.debugInfo = m.debugInfo[1:] // Keep only the last 5 messages
+		m.debugInfo = append(m.debugInfo, fmt.Sprintf("Key pressed - Type: %v, Runes: %v, String: %s", msg.Type, msg.Runes, msg.String()))
+		if len(m.debugInfo) > 10 {
+			m.debugInfo = m.debugInfo[1:] // Keep only the last 10 messages
 		}
+
 		switch {
 		case m.state == InMenu:
 			return m.updateMenu(msg)
@@ -209,8 +251,10 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.adminMode {
 				if msg.String() == "a" || (len(msg.Runes) > 0 && msg.Runes[0] == 'a') || msg.Type == tea.KeyRunes && string(msg.Runes) == "a" {
 					m.debugInfo = append(m.debugInfo, "Admin key detected")
+					fileStatus := m.getPasswordFileStatus()
+					m.debugInfo = append(m.debugInfo, fmt.Sprintf("Password file status: %s", fileStatus))
 					if m.adminPassword == "" {
-						m.debugInfo = append(m.debugInfo, "Admin mode is disabled. No password file.")
+						m.debugInfo = append(m.debugInfo, "Admin password is empty")
 					} else {
 						m.state = AdminPasswordEntry
 						m.debugInfo = append(m.debugInfo, "Entering admin password entry mode.")
@@ -218,7 +262,6 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 			} else {
-				// Existing admin mode handling
 				switch msg.String() {
 				case "up", "k":
 					m.selectedLeaderboardEntry = max(0, m.selectedLeaderboardEntry-1)
@@ -243,11 +286,11 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if strings.TrimSpace(m.adminPasswordAttempt) == strings.TrimSpace(m.adminPassword) {
 					m.adminMode = true
 					m.state = ViewingLeaderboard
-					m.adminPasswordAttempt = ""          // Clear the password attempt
-					fmt.Println("Admin mode activated.") // Debug output
+					m.adminPasswordAttempt = "" // Clear the password attempt
+					m.debugInfo = append(m.debugInfo, "Admin mode activated.")
 				} else {
 					m.adminPasswordAttempt = ""
-					fmt.Println("Incorrect password. Please try again.") // Feedback for incorrect password
+					m.debugInfo = append(m.debugInfo, "Incorrect password. Please try again.")
 				}
 				return m, nil
 			case tea.KeyBackspace:
@@ -261,7 +304,7 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.adminPasswordAttempt = ""
 				return m, nil
 			}
-			fmt.Printf("Current password attempt: %s\n", m.adminPasswordAttempt) // Debug output
+			m.debugInfo = append(m.debugInfo, fmt.Sprintf("Current password attempt length: %d", len(m.adminPasswordAttempt)))
 
 		case key.Matches(msg, m.KeyMap.Menu):
 			m.state = InMenu
@@ -328,29 +371,6 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m GameModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case key.Matches(msg, m.KeyMap.Up):
-		m.selectedOption = (m.selectedOption - 1 + len(m.menuOptions)) % len(m.menuOptions)
-	case key.Matches(msg, m.KeyMap.Down):
-		m.selectedOption = (m.selectedOption + 1) % len(m.menuOptions)
-	case key.Matches(msg, m.KeyMap.Number), key.Matches(msg, key.NewBinding(key.WithKeys("enter"))):
-		switch m.selectedOption {
-		case 0: // Resume Game
-			m.state = Playing
-			return m, nil
-		case 1: // New Game
-			return NewMenuModel(m.width, m.height), nil
-		case 2: // View Leaderboard
-			m.state = ViewingLeaderboard
-			return m, nil
-		case 3: // Quit
-			return m, tea.Quit
-		}
-	}
-	return m, nil
-}
-
 func (m GameModel) View() string {
 	var content string
 	switch m.state {
@@ -367,11 +387,7 @@ func (m GameModel) View() string {
 	}
 
 	debugView := strings.Join(m.debugInfo, "\n")
-	combinedContent := fmt.Sprintf("%s\n\nDebug Info:\n%s", content, debugView)
-
-	return lipgloss.Place(m.width, m.height,
-		lipgloss.Center, lipgloss.Center,
-		combinedContent)
+	return fmt.Sprintf("%s\n\nDebug Info:\n%s", content, debugView)
 }
 
 func (m GameModel) renderMenu() string {
@@ -385,7 +401,7 @@ func (m GameModel) renderMenu() string {
 		}
 		s.WriteString(option + "\n")
 	}
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, s.String())
+	return s.String()
 }
 
 func (m GameModel) renderWinScreen() string {
@@ -423,9 +439,7 @@ func (m GameModel) renderWinScreen() string {
 		textStyle.Render(namePrompt+m.playerName),
 		textStyle.Render(instructionText))
 
-	boxedWinMessage := boxStyle.Render(winMessage)
-
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, boxedWinMessage)
+	return boxStyle.Render(winMessage)
 }
 
 func (m GameModel) renderLeaderboard() string {
@@ -466,11 +480,7 @@ func (m GameModel) renderAdminPasswordEntry() string {
 	prompt := "Enter admin password: "
 	maskedPassword := strings.Repeat("*", len(m.adminPasswordAttempt))
 
-	message := fmt.Sprintf("%s%s\n\nPress Enter to submit or Esc to cancel", prompt, maskedPassword)
-
-	return lipgloss.Place(m.width, m.height,
-		lipgloss.Center, lipgloss.Center,
-		message)
+	return fmt.Sprintf("%s%s\n\nPress Enter to submit or Esc to cancel", prompt, maskedPassword)
 }
 
 func (m GameModel) renderGame() string {
@@ -483,8 +493,7 @@ func (m GameModel) renderGame() string {
 		statusView = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Render("The solution is incorrect. Please check the highlighted cells and try again.")
 	}
 
-	mainView := lipgloss.JoinVertical(lipgloss.Center, boardView, infoView, statusView)
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, mainView)
+	return lipgloss.JoinVertical(lipgloss.Center, boardView, infoView, statusView)
 }
 
 func (m GameModel) renderBoard() string {
@@ -615,6 +624,34 @@ func (m *GameModel) SaveScore() {
 	m.nameEntered = false
 }
 
+func (m GameModel) getPasswordFileStatus() string {
+	passwordFilePath, dirInfo, err := findAdminPasswordFile()
+
+	// Always include directory information in the status
+	status := strings.Join(dirInfo, "\n") + "\n\n"
+
+	if err != nil {
+		return status + fmt.Sprintf("Admin password file not found: %v", err)
+	}
+
+	fileInfo, err := os.Stat(passwordFilePath)
+	if err != nil {
+		return status + fmt.Sprintf("Error checking file at %s: %v", passwordFilePath, err)
+	}
+
+	content, err := ioutil.ReadFile(passwordFilePath)
+	if err != nil {
+		return status + fmt.Sprintf("Error reading file at %s: %v", passwordFilePath, err)
+	}
+
+	if len(strings.TrimSpace(string(content))) == 0 {
+		return status + fmt.Sprintf("File at %s is empty", passwordFilePath)
+	}
+
+	return status + fmt.Sprintf("File exists at %s, size: %d bytes, last modified: %s",
+		passwordFilePath, fileInfo.Size(), fileInfo.ModTime())
+}
+
 // Helper function to format duration as "Xm Ys"
 func formatDuration(d time.Duration) string {
 	m := d / time.Minute
@@ -644,28 +681,6 @@ func min(a, b int) int {
 		return a
 	}
 	return b
-}
-
-func (m GameModel) getPasswordFileStatus() string {
-	passwordFilePath, err := findAdminPasswordFile()
-	if err != nil {
-		return fmt.Sprintf("Admin password file not found: %v", err)
-	}
-
-	fileInfo, err := os.Stat(passwordFilePath)
-	if err != nil {
-		return fmt.Sprintf("Error checking file at %s: %v", passwordFilePath, err)
-	}
-
-	content, err := os.ReadFile(passwordFilePath)
-	if err != nil {
-		return fmt.Sprintf("Error reading file at %s: %v", passwordFilePath, err)
-	}
-	if len(strings.TrimSpace(string(content))) == 0 {
-		return fmt.Sprintf("File at %s is empty", passwordFilePath)
-	}
-	return fmt.Sprintf("File exists at %s, size: %d bytes, last modified: %s",
-		passwordFilePath, fileInfo.Size(), fileInfo.ModTime())
 }
 
 type GameWon struct{}
