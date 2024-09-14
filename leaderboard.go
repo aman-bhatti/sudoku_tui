@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"sort"
 	"time"
@@ -30,11 +29,11 @@ func (l *Leaderboard) AddEntry(name string, duration time.Duration, difficulty D
 		Name:       name,
 		Time:       duration,
 		Difficulty: difficulty,
-		Date:       time.Now(), // Ensure this line is present
+		Date:       time.Now(),
 	}
 	l.Entries = append(l.Entries, entry)
 	// Sort entries if needed
-	l.SaveToFile("sudoku_leaderboard.json") // Make sure to save after adding
+	l.SaveToFile("sudoku_leaderboard.json")
 	sort.Slice(l.Entries, func(i, j int) bool {
 		return l.Entries[i].Time < l.Entries[j].Time
 	})
@@ -45,7 +44,7 @@ func (l *Leaderboard) SaveToFile(filename string) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(filename, data, 0644)
+	return os.WriteFile(filename, data, 0644)
 }
 
 func (l *Leaderboard) DeleteEntry(index int) {
@@ -59,7 +58,7 @@ func (l *Leaderboard) DeleteEntry(index int) {
 }
 
 func LoadLeaderboardFromFile(filename string) (*Leaderboard, error) {
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return NewLeaderboard(), nil

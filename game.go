@@ -194,15 +194,15 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.adminMode {
 				if msg.String() == "a" || (len(msg.Runes) > 0 && msg.Runes[0] == 'a') || msg.Type == tea.KeyRunes && string(msg.Runes) == "a" {
 					if m.adminPassword == "" {
-						// Optionally, you can still log this error somewhere if needed
-						// fmt.Println("Admin mode is disabled. No password file.")
 					} else {
 						m.state = AdminPasswordEntry
 					}
 					return m, nil
 				}
+				if msg.Type == tea.KeyEsc || msg.String() == "q" {
+					return NewMenuModel(m.width, m.height), nil
+				}
 			} else {
-				// Existing admin mode handling
 				switch msg.String() {
 				case "up", "k":
 					m.selectedLeaderboardEntry = max(0, m.selectedLeaderboardEntry-1)
@@ -217,9 +217,6 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.selectedLeaderboardEntry = 0
 				}
 			}
-			if msg.Type == tea.KeyEsc || msg.String() == "q" {
-				return NewMenuModel(m.width, m.height), nil
-			}
 
 		case m.state == AdminPasswordEntry:
 			switch msg.Type {
@@ -227,11 +224,11 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if strings.TrimSpace(m.adminPasswordAttempt) == strings.TrimSpace(m.adminPassword) {
 					m.adminMode = true
 					m.state = ViewingLeaderboard
-					m.adminPasswordAttempt = ""          // Clear the password attempt
-					fmt.Println("Admin mode activated.") // Debug output
+					m.adminPasswordAttempt = ""
+					fmt.Println("Admin mode activated.")
 				} else {
 					m.adminPasswordAttempt = ""
-					fmt.Println("Incorrect password. Please try again.") // Feedback for incorrect password
+					fmt.Println("Incorrect password. Please try again.")
 				}
 				return m, nil
 			case tea.KeyBackspace:
@@ -245,7 +242,6 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.adminPasswordAttempt = ""
 				return m, nil
 			}
-			fmt.Printf("Current password attempt: %s\n", m.adminPasswordAttempt) // Debug output
 
 		case key.Matches(msg, m.KeyMap.Menu):
 			m.state = InMenu
