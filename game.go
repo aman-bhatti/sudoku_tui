@@ -6,8 +6,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	env "github.com/muesli/termenv"
-	"io/ioutil"
 	"log"
+	"os"
 	"strings"
 	"time"
 )
@@ -82,7 +82,7 @@ func NewGameModel(width, height int, difficulty Difficulty) *GameModel {
 		}
 	}
 
-	adminPassword, err := ioutil.ReadFile("admin_password.txt")
+	adminPassword, err := os.ReadFile("admin_password.txt")
 	if err != nil {
 		log.Println("Warning: Could not read admin password file. Admin mode will be disabled.")
 	}
@@ -159,28 +159,15 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case m.state == ViewingLeaderboard:
-			if !m.adminMode {
-				if msg.Type == tea.KeyRunes {
-					m.adminModeBuffer += msg.String()
-					if len(m.adminModeBuffer) > 5 {
-						m.adminModeBuffer = m.adminModeBuffer[1:]
-					}
-					if m.adminModeBuffer == "admin" {
-						if m.adminPassword == "" {
-							fmt.Println("Admin mode is disabled. Please create an admin_password.txt file to enable it.")
-						} else {
-							m.state = AdminPasswordEntry
-							fmt.Println("Entering admin password entry mode.")
-						}
-						m.adminModeBuffer = ""
-						return m, nil
-					}
-				} else if msg.Type == tea.KeyBackspace {
-					if len(m.adminModeBuffer) > 0 {
-						m.adminModeBuffer = m.adminModeBuffer[:len(m.adminModeBuffer)-1]
-					}
+			if key.Matches(msg, m.KeyMap.AdminMode) && !m.adminMode {
+				if m.adminPassword == "" {
+					fmt.Println("Admin mode is disabled. Please create an admin_password.txt file to enable it.")
+				} else {
+					m.state = AdminPasswordEntry
+					fmt.Println("Entering admin password entry mode.")
 				}
-			} else {
+				return m, nil
+			} else if m.adminMode {
 				switch msg.String() {
 				case "up", "k":
 					m.selectedLeaderboardEntry = max(0, m.selectedLeaderboardEntry-1)
@@ -410,7 +397,7 @@ func (m GameModel) renderLeaderboard() string {
 	if m.adminMode {
 		s.WriteString("\nAdmin Mode: Use up/down to select, 'd' to delete, 'q' to exit admin mode")
 	} else {
-		s.WriteString("\nType 'admin' to enter admin mode, 'q' or 'esc' to return to menu")
+		s.WriteString("\nPress 'a' for admin mode, 'q' or 'esc' to return to menu")
 	}
 
 	return lipgloss.Place(m.width, m.height,
