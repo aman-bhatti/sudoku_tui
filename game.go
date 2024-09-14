@@ -6,8 +6,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	env "github.com/muesli/termenv"
-	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -83,9 +83,17 @@ func NewGameModel(width, height int, difficulty Difficulty) *GameModel {
 		}
 	}
 
-	adminPassword, err := os.ReadFile("admin_password.txt")
+	pwd, _ := os.Getwd()
+	adminPasswordPath := filepath.Join(pwd, "admin_password.txt")
+	adminPassword, err := os.ReadFile(adminPasswordPath)
+	debugInfo := []string{
+		fmt.Sprintf("Current working directory: %s", pwd),
+		fmt.Sprintf("Admin password file path: %s", adminPasswordPath),
+	}
 	if err != nil {
-		log.Printf("Error reading admin password file: %v", err)
+		debugInfo = append(debugInfo, fmt.Sprintf("Error reading admin password file: %v", err))
+	} else {
+		debugInfo = append(debugInfo, "Admin password file read successfully")
 	}
 
 	leaderboard, err := LoadLeaderboardFromFile("sudoku_leaderboard.json")
@@ -118,7 +126,7 @@ func NewGameModel(width, height int, difficulty Difficulty) *GameModel {
 		adminMode:                false,
 		selectedLeaderboardEntry: 0,
 		adminModeBuffer:          "",
-		debugInfo:                make([]string, 0),
+		debugInfo:                debugInfo,
 	}
 }
 
@@ -167,14 +175,17 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.adminMode {
 				if msg.String() == "a" || (len(msg.Runes) > 0 && msg.Runes[0] == 'a') || msg.Type == tea.KeyRunes && string(msg.Runes) == "a" {
 					m.debugInfo = append(m.debugInfo, "Admin key detected")
+					fileStatus := m.getPasswordFileStatus()
+					m.debugInfo = append(m.debugInfo, fmt.Sprintf("Password file status: %s", fileStatus))
 					if m.adminPassword == "" {
-						m.debugInfo = append(m.debugInfo, fmt.Sprintf("Admin mode is disabled. Password file status: %v", m.getPasswordFileStatus()))
+						m.debugInfo = append(m.debugInfo, "Admin password is empty")
 					} else {
 						m.state = AdminPasswordEntry
 						m.debugInfo = append(m.debugInfo, "Entering admin password entry mode.")
 					}
 					return m, nil
 				}
+
 			} else {
 				// Existing admin mode handling
 				switch msg.String() {
@@ -605,21 +616,24 @@ func min(a, b int) int {
 }
 
 func (m GameModel) getPasswordFileStatus() string {
-	_, err := os.Stat("admin_password.txt")
+	pwd, _ := os.Getwd()
+	adminPasswordPath := filepath.Join(pwd, "admin_password.txt")
+	fileInfo, err := os.Stat(adminPasswordPath)
 	if os.IsNotExist(err) {
-		return "File does not exist"
+		return fmt.Sprintf("File does not exist at %s", adminPasswordPath)
 	} else if err != nil {
-		return fmt.Sprintf("Error checking file: %v", err)
+		return fmt.Sprintf("Error checking file at %s: %v", adminPasswordPath, err)
 	}
 
-	content, err := os.ReadFile("admin_password.txt")
+	content, err := os.ReadFile(adminPasswordPath)
 	if err != nil {
-		return fmt.Sprintf("Error reading file: %v", err)
+		return fmt.Sprintf("Error reading file at %s: %v", adminPasswordPath, err)
 	}
 	if len(strings.TrimSpace(string(content))) == 0 {
-		return "File is empty"
+		return fmt.Sprintf("File at %s is empty", adminPasswordPath)
 	}
-	return "File exists and is not empty"
+	return fmt.Sprintf("File exists at %s, size: %d bytes, last modified: %s",
+		adminPasswordPath, fileInfo.Size(), fileInfo.ModTime())
 }
 
 type GameWon struct{}
