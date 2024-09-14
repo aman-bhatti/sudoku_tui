@@ -184,9 +184,13 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.playerName = m.playerName[:len(m.playerName)-1]
 					}
 				case tea.KeyRunes:
-					if len(m.playerName) < 20 { // Limit name length
+					if len(m.playerName) < 20 {
 						m.playerName += string(msg.Runes)
 					}
+				}
+			} else {
+				if msg.Type == tea.KeyEsc || msg.String() == "q" {
+					return NewMenuModel(m.width, m.height), nil
 				}
 			}
 
@@ -200,9 +204,15 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				if msg.Type == tea.KeyEsc || msg.String() == "q" {
-					return NewMenuModel(m.width, m.height), nil
+					if m.nameEntered {
+						return NewMenuModel(m.width, m.height), nil
+					} else {
+						m.state = Playing
+					}
+					return m, nil
 				}
 			} else {
+
 				switch msg.String() {
 				case "up", "k":
 					m.selectedLeaderboardEntry = max(0, m.selectedLeaderboardEntry-1)
@@ -273,6 +283,14 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, cmd
 			}
+			if key.Matches(msg, m.KeyMap.ViewLeaderboard) {
+				m.state = ViewingLeaderboard
+				m.nameEntered = false // Reset this flag when viewing leaderboard from game
+				return m, nil
+			}
+		case key.Matches(msg, m.KeyMap.ClearAll):
+			m.clearAllModifiableCells()
+			return m, nil
 
 		case key.Matches(msg, m.KeyMap.Quit):
 			return m, tea.Sequence(
@@ -302,7 +320,6 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		})
 
 	case ForceRender:
-		// Do nothing, just trigger a re-render
 	}
 
 	return m, nil
@@ -488,6 +505,22 @@ func (m GameModel) renderBoard() string {
 }
 
 func (m GameModel) renderInfo() string {
+	// Style definitions
+	headerStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("15")).
+		Bold(true).
+		Padding(0, 1)
+
+	infoStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("15")).
+		Padding(0, 1)
+
+	controlsStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("33")).
+		Italic(true).
+		Padding(0, 1)
+
+	// Calculate elapsed time
 	var elapsedTime time.Duration
 	if m.state == Won {
 		elapsedTime = m.elapsedTimeOnWin
@@ -495,15 +528,28 @@ func (m GameModel) renderInfo() string {
 		elapsedTime = time.Since(m.startTime).Round(time.Second)
 	}
 
-	info := fmt.Sprintf("Cells left: %d\n", m.cellsLeft)
-	info += fmt.Sprintf("Elapsed time: %02d:%02d\n", int(elapsedTime.Minutes()), int(elapsedTime.Seconds())%60)
-	info += "\n• q/esc quit • m menu • b leaderboard • c clear all\n"
-	info += fmt.Sprintf("\nSudoku - %s\n", m.difficulty)
-	info += "\nUse arrow keys to move, numbers to fill"
+	header := headerStyle.Render(fmt.Sprintf("Sudoku - %s", m.difficulty))
 
-	whiteTextStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
+	gameInfo := infoStyle.Render(fmt.Sprintf("Cells left: %d\n"+
+		"Elapsed time: %02d:%02d",
+		m.cellsLeft,
+		int(elapsedTime.Minutes()), int(elapsedTime.Seconds())%60))
 
-	return cellsLeftStyle.Render(whiteTextStyle.Render(info))
+	controls := controlsStyle.Render("q/esc: quit • m: menu • b: leaderboard • ⌫ clear cell • C: clear all\n" +
+		"Use arrow keys to move, numbers to fill")
+
+	// Combine sections
+	info := lipgloss.JoinVertical(
+		lipgloss.Left,
+		header,
+		gameInfo,
+		"\n",
+		controls,
+	)
+
+	return lipgloss.NewStyle().
+		Padding(1).
+		Render(info)
 }
 
 func (m *GameModel) cursorDown() {
@@ -584,15 +630,12 @@ func (m *GameModel) SaveScore() {
 		m.leaderboard.AddEntry(m.playerName, m.elapsedTimeOnWin, m.difficulty)
 		err := m.leaderboard.SaveToFile("sudoku_leaderboard.json")
 		if err != nil {
-			// Handle error (maybe log it)
 			fmt.Println("Error saving leaderboard:", err)
 		}
 	}
-	// Reset name entry state
-	m.nameEntered = false
+	//m.nameEntered = false
 }
 
-// Helper function to format duration as "Xm Ys"
 func formatDuration(d time.Duration) string {
 	m := d / time.Minute
 	d -= m * time.Minute
@@ -600,7 +643,6 @@ func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%dm %ds", m, s)
 }
 
-// Helper function to truncate string if it's too long
 func truncateString(s string, maxLength int) string {
 	if len(s) <= maxLength {
 		return s
@@ -608,7 +650,6 @@ func truncateString(s string, maxLength int) string {
 	return s[:maxLength-3] + "..."
 }
 
-// Helper functions for admin mode
 func max(a, b int) int {
 	if a > b {
 		return a
@@ -643,6 +684,18 @@ func (m GameModel) getPasswordFileStatus() string {
 	}
 	return fmt.Sprintf("File exists at %s, size: %d bytes, last modified: %s",
 		passwordFilePath, fileInfo.Size(), fileInfo.ModTime())
+}
+
+func (m *GameModel) clearAllModifiableCells() {
+	for i := 0; i < sudokuLen; i++ {
+		for j := 0; j < sudokuLen; j++ {
+			if m.initialBoard[i][j] == 0 {
+				m.board[i][j] = 0
+				m.cellsLeft++
+			}
+		}
+	}
+	m.errCoordinates = make(map[coordinate]bool)
 }
 
 type GameWon struct{}

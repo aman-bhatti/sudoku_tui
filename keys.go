@@ -16,6 +16,7 @@ type KeyMap struct {
 	Menu            key.Binding
 	ViewLeaderboard key.Binding
 	AdminMode       key.Binding
+	ClearAll        key.Binding
 }
 
 func (k KeyMap) ShortHelp() []key.Binding {
@@ -57,14 +58,14 @@ var Keys = KeyMap{
 		key.WithHelp("q/esc", "quit"),
 	),
 	Clear: key.NewBinding(
-		key.WithKeys("enter", " "),
+		key.WithKeys("backspace", " "),
 		key.WithHelp("↵/space", "clear cell"),
 	),
 	Number: key.NewBinding(
 		key.WithKeys("1", "2", "3", "4", "5", "6", "7", "8", "9"),
 		key.WithHelp("", "set cell to number"),
 	),
-	Menu: key.NewBinding(key.WithKeys("m")), // Add this line for the "m" key
+	Menu: key.NewBinding(key.WithKeys("m")),
 	ViewLeaderboard: key.NewBinding(
 		key.WithKeys("b"),
 		key.WithHelp("b", "view leaderboard"),
@@ -72,5 +73,9 @@ var Keys = KeyMap{
 	AdminMode: key.NewBinding(
 		key.WithKeys("a"),
 		key.WithHelp("a", "enter admin mode"),
+	),
+	ClearAll: key.NewBinding(
+		key.WithKeys("C"),
+		key.WithHelp("C", "clear all modifiable cells"),
 	),
 }
