@@ -1,5 +1,5 @@
 .ssh/
-
+.env
 
 admin_password.txt
 
