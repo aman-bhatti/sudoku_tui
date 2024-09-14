@@ -85,7 +85,7 @@ func NewGameModel(width, height int, difficulty Difficulty) *GameModel {
 
 	adminPassword, err := os.ReadFile("admin_password.txt")
 	if err != nil {
-		log.Println("Warning: Could not read admin password file. Admin mode will be disabled.")
+		log.Printf("Error reading admin password file: %v", err)
 	}
 
 	leaderboard, err := LoadLeaderboardFromFile("sudoku_leaderboard.json")
@@ -168,7 +168,7 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if msg.String() == "a" || (len(msg.Runes) > 0 && msg.Runes[0] == 'a') || msg.Type == tea.KeyRunes && string(msg.Runes) == "a" {
 					m.debugInfo = append(m.debugInfo, "Admin key detected")
 					if m.adminPassword == "" {
-						m.debugInfo = append(m.debugInfo, "Admin mode is disabled. No password file.")
+						m.debugInfo = append(m.debugInfo, fmt.Sprintf("Admin mode is disabled. Password file status: %v", m.getPasswordFileStatus()))
 					} else {
 						m.state = AdminPasswordEntry
 						m.debugInfo = append(m.debugInfo, "Entering admin password entry mode.")
@@ -602,6 +602,24 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func (m GameModel) getPasswordFileStatus() string {
+	_, err := os.Stat("admin_password.txt")
+	if os.IsNotExist(err) {
+		return "File does not exist"
+	} else if err != nil {
+		return fmt.Sprintf("Error checking file: %v", err)
+	}
+
+	content, err := os.ReadFile("admin_password.txt")
+	if err != nil {
+		return fmt.Sprintf("Error reading file: %v", err)
+	}
+	if len(strings.TrimSpace(string(content))) == 0 {
+		return "File is empty"
+	}
+	return "File exists and is not empty"
 }
 
 type GameWon struct{}
