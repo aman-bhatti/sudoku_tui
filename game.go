@@ -497,7 +497,7 @@ func (m GameModel) renderInfo() string {
 
 	info := fmt.Sprintf("Cells left: %d\n", m.cellsLeft)
 	info += fmt.Sprintf("Elapsed time: %02d:%02d\n", int(elapsedTime.Minutes()), int(elapsedTime.Seconds())%60)
-	info += "\n? toggle help • q/esc quit • m menu • l leaderboard • c clear all\n"
+	info += "\n• q/esc quit • m menu • b leaderboard • c clear all\n"
 	info += fmt.Sprintf("\nSudoku - %s\n", m.difficulty)
 	info += "\nUse arrow keys to move, numbers to fill"
 
