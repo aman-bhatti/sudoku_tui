@@ -131,8 +131,7 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		fmt.Printf("Key pressed: %s\n", msg.String()) // Debug output
-
+		fmt.Printf("Key pressed - Type: %v, Runes: %v, String: %s\n", msg.Type, msg.Runes, msg.String())
 		switch {
 		case m.state == InMenu:
 			return m.updateMenu(msg)
@@ -159,15 +158,20 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case m.state == ViewingLeaderboard:
-			if key.Matches(msg, m.KeyMap.AdminMode) && !m.adminMode {
-				if m.adminPassword == "" {
-					fmt.Println("Admin mode is disabled. Please create an admin_password.txt file to enable it.")
-				} else {
-					m.state = AdminPasswordEntry
-					fmt.Println("Entering admin password entry mode.")
+			if !m.adminMode {
+				// Check for 'a' key press in multiple ways
+				if msg.String() == "a" || (len(msg.Runes) > 0 && msg.Runes[0] == 'a') || msg.Type == tea.KeyRunes && string(msg.Runes) == "a" {
+					fmt.Println("Admin key detected")
+					if m.adminPassword == "" {
+						fmt.Println("Admin mode is disabled. Please create an admin_password.txt file to enable it.")
+					} else {
+						m.state = AdminPasswordEntry
+						fmt.Println("Entering admin password entry mode.")
+					}
+					return m, nil
 				}
-				return m, nil
-			} else if m.adminMode {
+			} else {
+				// Existing admin mode handling
 				switch msg.String() {
 				case "up", "k":
 					m.selectedLeaderboardEntry = max(0, m.selectedLeaderboardEntry-1)
