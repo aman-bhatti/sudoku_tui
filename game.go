@@ -56,6 +56,8 @@ type GameModel struct {
 	adminPasswordAttempt     string
 	adminMode                bool
 	selectedLeaderboardEntry int
+	adminModeBuffer          string
+	debugInfo                []string
 }
 
 type setBackgroundColorMsg struct {
@@ -115,6 +117,8 @@ func NewGameModel(width, height int, difficulty Difficulty) *GameModel {
 		adminPasswordAttempt:     "",
 		adminMode:                false,
 		selectedLeaderboardEntry: 0,
+		adminModeBuffer:          "",
+		debugInfo:                make([]string, 0),
 	}
 }
 
@@ -129,6 +133,11 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		debugMsg := fmt.Sprintf("Key pressed - Type: %v, Runes: %v, String: %s", msg.Type, msg.Runes, msg.String())
+		m.debugInfo = append(m.debugInfo, debugMsg)
+		if len(m.debugInfo) > 5 {
+			m.debugInfo = m.debugInfo[1:] // Keep only the last 5 messages
+		}
 		switch {
 		case m.state == InMenu:
 			return m.updateMenu(msg)
@@ -155,15 +164,19 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case m.state == ViewingLeaderboard:
-			if msg.String() == "a" && !m.adminMode {
-				if m.adminPassword == "" {
-					fmt.Println("Admin mode is disabled. Please create an admin_password.txt file to enable it.")
-				} else {
-					m.state = AdminPasswordEntry
-					fmt.Println("Entering admin password entry mode.") // Debug output
+			if !m.adminMode {
+				if msg.String() == "a" || (len(msg.Runes) > 0 && msg.Runes[0] == 'a') || msg.Type == tea.KeyRunes && string(msg.Runes) == "a" {
+					m.debugInfo = append(m.debugInfo, "Admin key detected")
+					if m.adminPassword == "" {
+						m.debugInfo = append(m.debugInfo, "Admin mode is disabled. No password file.")
+					} else {
+						m.state = AdminPasswordEntry
+						m.debugInfo = append(m.debugInfo, "Entering admin password entry mode.")
+					}
+					return m, nil
 				}
-				return m, nil
-			} else if m.adminMode {
+			} else {
+				// Existing admin mode handling
 				switch msg.String() {
 				case "up", "k":
 					m.selectedLeaderboardEntry = max(0, m.selectedLeaderboardEntry-1)
@@ -177,7 +190,8 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.adminMode = false
 					m.selectedLeaderboardEntry = 0
 				}
-			} else if msg.Type == tea.KeyEsc || msg.String() == "q" {
+			}
+			if msg.Type == tea.KeyEsc || msg.String() == "q" {
 				return NewMenuModel(m.width, m.height), nil
 			}
 
@@ -189,11 +203,11 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.state = ViewingLeaderboard
 					m.adminPasswordAttempt = ""          // Clear the password attempt
 					fmt.Println("Admin mode activated.") // Debug output
-					return m, nil
 				} else {
 					m.adminPasswordAttempt = ""
 					fmt.Println("Incorrect password. Please try again.") // Feedback for incorrect password
 				}
+				return m, nil
 			case tea.KeyBackspace:
 				if len(m.adminPasswordAttempt) > 0 {
 					m.adminPasswordAttempt = m.adminPasswordAttempt[:len(m.adminPasswordAttempt)-1]
@@ -205,6 +219,7 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.adminPasswordAttempt = ""
 				return m, nil
 			}
+			fmt.Printf("Current password attempt: %s\n", m.adminPasswordAttempt) // Debug output
 
 		case key.Matches(msg, m.KeyMap.Menu):
 			m.state = InMenu
@@ -295,18 +310,26 @@ func (m GameModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m GameModel) View() string {
+	var content string
 	switch m.state {
 	case InMenu:
-		return m.renderMenu()
+		content = m.renderMenu()
 	case Won:
-		return m.renderWinScreen()
+		content = m.renderWinScreen()
 	case ViewingLeaderboard:
-		return m.renderLeaderboard()
+		content = m.renderLeaderboard()
 	case AdminPasswordEntry:
-		return m.renderAdminPasswordEntry()
+		content = m.renderAdminPasswordEntry()
 	default:
-		return m.renderGame()
+		content = m.renderGame()
 	}
+
+	debugView := strings.Join(m.debugInfo, "\n")
+	combinedContent := fmt.Sprintf("%s\n\nDebug Info:\n%s", content, debugView)
+
+	return lipgloss.Place(m.width, m.height,
+		lipgloss.Center, lipgloss.Center,
+		combinedContent)
 }
 
 func (m GameModel) renderMenu() string {
@@ -394,9 +417,7 @@ func (m GameModel) renderLeaderboard() string {
 		s.WriteString("\nPress 'a' for admin mode, 'q' or 'esc' to return to menu")
 	}
 
-	return lipgloss.Place(m.width, m.height,
-		lipgloss.Center, lipgloss.Center,
-		s.String())
+	return s.String()
 }
 
 func (m GameModel) renderAdminPasswordEntry() string {
