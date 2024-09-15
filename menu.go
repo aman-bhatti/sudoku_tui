@@ -98,7 +98,6 @@ func (m MenuModel) View() string {
 		s += fmt.Sprintf("%s%s\n", cursor, choiceStyle.Render(choice))
 	}
 
-	// Create a box for the menu
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("11")).
@@ -112,7 +111,6 @@ func (m MenuModel) View() string {
 
 	menu := boxStyle.Render(s)
 
-	// Center the menu both vertically and horizontally
 	return lipgloss.Place(m.width, m.height,
 		lipgloss.Center, lipgloss.Center,
 		menu)

@@ -18,12 +18,10 @@ const sudokuLen = 9
 const adminPasswordFileName = "admin_password.txt"
 
 func findAdminPasswordFile() (string, error) {
-	// Try current directory first
 	if _, err := os.Stat(adminPasswordFileName); err == nil {
 		return adminPasswordFileName, nil
 	}
 
-	// Try the directory of the executable
 	exePath, err := os.Executable()
 	if err == nil {
 		exeDir := filepath.Dir(exePath)
@@ -33,7 +31,6 @@ func findAdminPasswordFile() (string, error) {
 		}
 	}
 
-	// Try home directory
 	homeDir, err := os.UserHomeDir()
 	if err == nil {
 		filePath := filepath.Join(homeDir, adminPasswordFileName)
@@ -127,7 +124,6 @@ func NewGameModel(width, height int, difficulty Difficulty) *GameModel {
 
 	leaderboard, err := LoadLeaderboardFromFile("sudoku_leaderboard.json")
 	if err != nil {
-		// Handle error (maybe log it)
 		leaderboard = NewLeaderboard()
 	}
 
@@ -281,14 +277,13 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.initialBoard[m.cursor.row][m.cursor.col] == 0 {
 				m.clear(m.cursor.row, m.cursor.col)
 			}
-			// If after clearing, the board is full, check for correctness
 			if m.cellsLeft == 0 {
 				checkMsg := m.check()()
 				return m.Update(checkMsg)
 			}
 			if key.Matches(msg, m.KeyMap.ViewLeaderboard) {
 				m.state = ViewingLeaderboard
-				m.nameEntered = false // Reset this flag when viewing leaderboard from game
+				m.nameEntered = false
 				return m, nil
 			}
 		case key.Matches(msg, m.KeyMap.ClearAll):
@@ -335,15 +330,15 @@ func (m GameModel) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.selectedOption = (m.selectedOption + 1) % len(m.menuOptions)
 	case key.Matches(msg, m.KeyMap.Number), key.Matches(msg, key.NewBinding(key.WithKeys("enter"))):
 		switch m.selectedOption {
-		case 0: // Resume Game
+		case 0:
 			m.state = Playing
 			return m, nil
-		case 1: // New Game
+		case 1:
 			return NewMenuModel(m.width, m.height), nil
-		case 2: // View Leaderboard
+		case 2:
 			m.state = ViewingLeaderboard
 			return m, nil
-		case 3: // Quit
+		case 3:
 			return m, tea.Quit
 		}
 	}
@@ -503,14 +498,11 @@ func (m GameModel) renderBoard() string {
 			isCursor := m.cursor.row == i && m.cursor.col == j
 			coord := coordinate{i, j}
 
-			// Determine if the cell is an error cell based on remainingErrCoordinates
 			isError := m.remainingErrCoordinates[coord]
 
-			// Format the cell
 			cellStr := formatCell(isError, isCursor, !isInitial, i, j, cellValue)
 			row.WriteString(cellStr)
 		}
-		// Format the row (add separators if needed)
 		rowStr := formatRow(i, row.String())
 		boardView.WriteString(rowStr + "\n")
 	}
@@ -533,7 +525,6 @@ func (m GameModel) renderInfo() string {
 		Italic(true).
 		Padding(0, 1)
 
-	// Calculate elapsed time
 	var elapsedTime time.Duration
 	if m.state == Won {
 		elapsedTime = m.elapsedTimeOnWin
@@ -551,7 +542,6 @@ func (m GameModel) renderInfo() string {
 	controls := controlsStyle.Render("q/esc: quit • m: menu • b: leaderboard • ⌫ clear cell • C: clear all\n" +
 		"Use arrow keys to move, numbers to fill")
 
-	// Combine sections
 	info := lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
@@ -589,18 +579,13 @@ func (m *GameModel) clear(row, col int) {
 		coord := coordinate{row, col}
 
 		if m.state == NeedsCorrection {
-			// If the cell was previously incorrect and hasn't been modified yet
 			if m.originalErrCoordinates[coord] && m.remainingErrCoordinates[coord] {
-				// Remove the cell from remaining incorrect cells
 				delete(m.remainingErrCoordinates, coord)
 			}
 
-			// Remove the cell from errCoordinates
 			delete(m.errCoordinates, coord)
 
-			// Check if all incorrect cells have been modified
 			if len(m.remainingErrCoordinates) == 0 {
-				// All incorrect cells have been modified; recheck the board
 				m.recheckBoard()
 			}
 		}
@@ -633,7 +618,6 @@ func (m *GameModel) set(row, col, value int) {
 		previousValue := m.board[row][col]
 		m.board[row][col] = value
 
-		// Update cellsLeft based on the change
 		if previousValue == 0 && value != 0 {
 			m.cellsLeft--
 		} else if previousValue != 0 && value == 0 {
@@ -643,23 +627,18 @@ func (m *GameModel) set(row, col, value int) {
 		if m.cellsLeft == 0 {
 			coord := coordinate{row, col}
 			if m.state == NeedsCorrection {
-				// Remove the cell from remainingErrCoordinates if it was originally incorrect
 				if m.originalErrCoordinates[coord] && m.remainingErrCoordinates[coord] {
 					delete(m.remainingErrCoordinates, coord)
 				}
 
-				// Recheck the board if all incorrect cells have been modified
 				if len(m.remainingErrCoordinates) == 0 {
-					// All incorrect cells have been modified; recheck the board
 					m.recheckBoard()
 				}
 			} else {
-				// First time the board is filled, check for correctness
 				m.updateErrCoordinates()
 				m.updateGameState()
 			}
 		} else {
-			// Board is not full, reset error tracking and state
 			m.errCoordinates = make(map[coordinate]bool)
 			m.originalErrCoordinates = make(map[coordinate]bool)
 			m.remainingErrCoordinates = make(map[coordinate]bool)
@@ -697,10 +676,8 @@ func (m *GameModel) updateErrCoordinates() {
 	}
 
 	if m.state != NeedsCorrection {
-		// Only initialize originalErrCoordinates the first time
 		m.originalErrCoordinates = m.copyCoordinates(m.errCoordinates)
 	}
-	// Always update remainingErrCoordinates
 	m.remainingErrCoordinates = m.copyCoordinates(m.errCoordinates)
 }
 
@@ -713,7 +690,6 @@ func (m *GameModel) updateGameState() {
 			m.state = NeedsCorrection
 		}
 	} else {
-		// Board is incomplete
 		if len(m.errCoordinates) == 0 {
 			m.state = Playing
 		} else {
@@ -727,7 +703,6 @@ func (m *GameModel) check() tea.Cmd {
 		m.errCoordinates = make(map[coordinate]bool)
 		incorrectCellsFound := false
 
-		// Iterate over the entire board
 		for i := 0; i < sudokuLen; i++ {
 			for j := 0; j < sudokuLen; j++ {
 				if m.board[i][j] != m.solution[i][j] {
@@ -810,15 +785,12 @@ func (m *GameModel) clearAllCells() {
 		for j := 0; j < sudokuLen; j++ {
 			if m.initialBoard[i][j] == 0 {
 				if m.board[i][j] != 0 {
-					// Only increment cellsLeft if the cell was filled
 					m.board[i][j] = 0
 					m.cellsLeft++
 				}
-				// If the cell is already empty, do nothing
 			}
 		}
 	}
-	// Reset error tracking and game state
 	m.errCoordinates = make(map[coordinate]bool)
 	m.originalErrCoordinates = make(map[coordinate]bool)
 	m.remainingErrCoordinates = make(map[coordinate]bool)

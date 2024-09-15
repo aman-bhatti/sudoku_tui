@@ -26,7 +26,6 @@ const (
 	port = "23234"
 )
 
-// ANSI color codes
 const (
 	reset     = "\033[0m"
 	underline = "\033[4m"
@@ -75,7 +74,6 @@ func main() {
 	}
 }
 
-// forceColorWriter is a custom writer that forces color output
 type forceColorWriter struct {
 	w io.Writer
 }
@@ -87,7 +85,6 @@ func (fcw forceColorWriter) Write(p []byte) (n int, err error) {
 func teaHandler(s ssh.Session) (tea.Model, []tea.ProgramOption) {
 	pty, _, _ := s.Pty()
 
-	// Force color output
 	lipgloss.SetColorProfile(termenv.ANSI256)
 
 	return NewMenuModel(pty.Window.Width, pty.Window.Height), []tea.ProgramOption{

@@ -50,7 +50,7 @@ func removeCells(board *[9][9]int, difficulty Difficulty) {
 		cellsToRemove = 50
 	}
 
-	attempts := cellsToRemove + 20 // Extra attempts to ensure unique solution
+	attempts := cellsToRemove + 20
 	for cellsToRemove > 0 && attempts > 0 {
 		row := rand.Intn(9)
 		col := rand.Intn(9)
@@ -118,4 +118,3 @@ func solve(board *[9][9]int, count *int) {
 	}
 	*count++
 }
-
