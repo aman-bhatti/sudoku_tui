@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -52,7 +51,6 @@ var (
 
 		if isError {
 			s = errorCellStyle(isCursor)
-			fmt.Printf("Applying error style to cell (%d, %d)\n", row, col)
 		} else if isCursor {
 			s = cursorCellStyle(modifiable)
 		} else {
@@ -82,4 +80,3 @@ var (
 
 	cellsLeftStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Margin(1, 0, 0, 0)
 )
-

@@ -21,7 +21,9 @@ func fillBoard(board *[9][9]int) bool {
 	for i := 0; i < 9; i++ {
 		for j := 0; j < 9; j++ {
 			if board[i][j] == 0 {
-				for num := 1; num <= 9; num++ {
+				nums := rand.Perm(9)
+				for _, n := range nums {
+					num := n + 1
 					if isValid(*board, i, j, num) {
 						board[i][j] = num
 						if fillBoard(board) {
@@ -48,12 +50,23 @@ func removeCells(board *[9][9]int, difficulty Difficulty) {
 		cellsToRemove = 50
 	}
 
-	for cellsToRemove > 0 {
+	attempts := cellsToRemove + 20 // Extra attempts to ensure unique solution
+	for cellsToRemove > 0 && attempts > 0 {
 		row := rand.Intn(9)
 		col := rand.Intn(9)
 		if board[row][col] != 0 {
+			backup := board[row][col]
 			board[row][col] = 0
-			cellsToRemove--
+
+			tempBoard := *board
+			solutions := countSolutions(tempBoard)
+
+			if solutions != 1 {
+				board[row][col] = backup
+				attempts--
+			} else {
+				cellsToRemove--
+			}
 		}
 	}
 }
@@ -76,3 +89,33 @@ func isValid(board [9][9]int, row, col, num int) bool {
 
 	return true
 }
+
+func countSolutions(board [9][9]int) int {
+	count := 0
+	solve(&board, &count)
+	return count
+}
+
+func solve(board *[9][9]int, count *int) {
+	if *count > 1 {
+		return
+	}
+	for i := 0; i < 9; i++ {
+		for j := 0; j < 9; j++ {
+			if board[i][j] == 0 {
+				nums := rand.Perm(9)
+				for _, n := range nums {
+					num := n + 1
+					if isValid(*board, i, j, num) {
+						board[i][j] = num
+						solve(board, count)
+						board[i][j] = 0
+					}
+				}
+				return
+			}
+		}
+	}
+	*count++
+}
+

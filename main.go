@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	host = "0.0.0.0"
-	port = "22"
+	host = "localhost"
+	port = "23234"
 )
 
 // ANSI color codes

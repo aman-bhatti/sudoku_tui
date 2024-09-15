@@ -67,19 +67,35 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m MenuModel) View() string {
-	s := lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Bold(true).Render("SUDOKU BUILT BY AMAN") + "\n\n"
-	s += lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(lipgloss.Color("11")).Render("Select difficulty:") + "\n"
-
+	menuBgColor := lipgloss.Color("11")
+	var cursorStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("9")).
+		Background(menuBgColor).
+		Bold(true)
+	s := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("0")).
+		Background(menuBgColor).
+		Bold(true).
+		Render("SUDOKU BUILT BY AMAN") + "\n\n"
+	s += lipgloss.NewStyle().
+		Foreground(lipgloss.Color("0")).
+		Background(menuBgColor).
+		Render("Select difficulty:") + "\n"
 	for i, choice := range m.choices {
 		cursor := " "
 		if m.cursor == i {
-			cursor = ">"
+			cursor = cursorStyle.Render(">")
 		}
-		choiceStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("0"))
+		choiceStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("0")).
+			Background(menuBgColor)
 		if m.cursor == i {
-			choiceStyle = choiceStyle.Foreground(lipgloss.Color("201")).Bold(true)
+			choiceStyle = choiceStyle.
+				Foreground(lipgloss.Color("201")).
+				Bold(true).
+				Background(menuBgColor)
 		}
-		s += fmt.Sprintf("%s %s\n", cursor, choiceStyle.Render(choice))
+		s += fmt.Sprintf("%s%s\n", cursor, choiceStyle.Render(choice))
 	}
 
 	// Create a box for the menu
